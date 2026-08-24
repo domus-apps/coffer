@@ -7,8 +7,9 @@
 // Same Liquid Glass icon language as its siblings Oriel, Pharos, and Transom:
 // the macOS squircle, frosted-glass forms (real gaussian-blurred backdrop via
 // CoreImage), specular rim highlights, and soft layered shadows. Coffer's
-// glyph is a strongbox: a frosted-glass chest with a padlock shackle rising
-// behind the lid and a keyhole on the front.
+// glyph is a clipboard item being kept: a bright glass card — content bars
+// and all — sliding down into an open glass coffer, its lower half ghosting
+// through the box front as a blurred silhouette.
 
 import AppKit
 import CoreImage
@@ -146,69 +147,58 @@ func drawGlassPane(
     glassRim(cg, around: path, width: rimWidth, bounds: bounds, top: rimTop, bottom: rimBottom)
 }
 
-// The glyph: a strongbox. The shackle arch rises behind the lid; the chest
-// body is the bright glass pane in front, carrying a lid seam and a keyhole.
-let chestBody = CGRect(x: 252, y: 220, width: 520, height: 350)
-let shackleRing = CGRect(x: 372, y: 480, width: 280, height: 290)
-let shackleWidth: CGFloat = 56
+// The glyph: a copied card sliding down into an open coffer. The card is the
+// bright hero, its content bars visible above the rim; the box in front is
+// milkier glass, so the card's lower half shows through only as a blurred
+// ghost — kept, not gone.
+let boxBody = CGRect(x: 252, y: 240, width: 520, height: 300)
+let card = CGRect(x: 352, y: 420, width: 320, height: 350)
 
-func shacklePath() -> CGPath {
-    CGPath(roundedRect: shackleRing, cornerWidth: 130, cornerHeight: 130, transform: nil)
-        .copy(strokingWithWidth: shackleWidth, lineCap: .butt, lineJoin: .miter, miterLimit: 10)
-}
-
-/// The shackle: milky translucent metal-glass, no backdrop blur (it is thin).
-func drawShackle(_ cg: CGContext, boost: Bool) {
-    let path = shacklePath()
-
+/// The card leans a few degrees mid-drop — it's falling into the coffer,
+/// not feeding out of a printer.
+func withCardTilt(_ cg: CGContext, _ body: (CGContext) -> Void) {
     cg.saveGState()
-    cg.setShadow(offset: CGSize(width: 0, height: -10), blur: 26, color: color(0x06402A, 0.25))
-    cg.addPath(path)
-    cg.setFillColor(color(0xCFF2E1))
-    cg.fillPath()
+    cg.translateBy(x: card.midX, y: card.midY)
+    cg.rotate(by: -0.1)
+    cg.translateBy(x: -card.midX, y: -card.midY)
+    body(cg)
     cg.restoreGState()
-
-    linearGradient(
-        cg, in: path,
-        colors: [color(0xFFFFFF, boost ? 0.85 : 0.72), color(0xFFFFFF, boost ? 0.62 : 0.46)],
-        from: CGPoint(x: shackleRing.midX, y: shackleRing.maxY + shackleWidth / 2),
-        to: CGPoint(x: shackleRing.midX, y: shackleRing.minY)
-    )
-    glassRim(cg, around: path, width: 3, bounds: shackleRing.insetBy(dx: -shackleWidth / 2, dy: -shackleWidth / 2), top: 0.9, bottom: 0.15)
 }
 
-func drawChest(_ cg: CGContext, backdrop: CGImage, boost: Bool) {
-    let path = CGPath(roundedRect: chestBody, cornerWidth: 56, cornerHeight: 56, transform: nil)
+func drawCard(_ cg: CGContext, backdrop: CGImage, boost: Bool) {
+    withCardTilt(cg) { cg in
+        let path = CGPath(roundedRect: card, cornerWidth: 44, cornerHeight: 44, transform: nil)
+        drawGlassPane(
+            cg, path: path, bounds: card, backdrop: backdrop,
+            tintTop: boost ? 0.98 : 0.94, tintBottom: boost ? 0.94 : 0.85,
+            rimWidth: 5, rimTop: 1.0, rimBottom: 0.3,
+            shadowBlur: 40, shadowAlpha: 0.3
+        )
+        drawCardContent(cg)
+    }
+}
+
+/// Ghosted content bars on the card — the copied text. Placed in the card's
+/// upper half so they stay visible above the box rim. Shared between the
+/// rendered icon and the flat Icon Composer layers.
+func drawCardContent(_ cg: CGContext) {
+    cg.setFillColor(color(0x1E7F52, 0.32))
+    for (i, w) in [CGFloat(184), 128].enumerated() {
+        let y = card.maxY - 72 - CGFloat(i) * 58
+        let bar = CGRect(x: card.minX + 44, y: y - 14, width: w, height: 28)
+        cg.addPath(CGPath(roundedRect: bar, cornerWidth: 14, cornerHeight: 14, transform: nil))
+    }
+    cg.fillPath()
+}
+
+func drawBox(_ cg: CGContext, backdrop: CGImage, boost: Bool) {
+    let path = CGPath(roundedRect: boxBody, cornerWidth: 56, cornerHeight: 56, transform: nil)
     drawGlassPane(
-        cg, path: path, bounds: chestBody, backdrop: backdrop,
-        tintTop: boost ? 0.98 : 0.94, tintBottom: boost ? 0.94 : 0.85,
-        rimWidth: 5, rimTop: 1.0, rimBottom: 0.3,
+        cg, path: path, bounds: boxBody, backdrop: backdrop,
+        tintTop: boost ? 0.72 : 0.6, tintBottom: boost ? 0.58 : 0.44,
+        rimWidth: 5, rimTop: 0.95, rimBottom: 0.25,
         shadowBlur: 46, shadowAlpha: 0.32
     )
-    drawChestFittings(cg)
-}
-
-/// Lid seam + keyhole on the chest body. Shared between the rendered icon
-/// and the flat Icon Composer layers.
-func drawChestFittings(_ cg: CGContext) {
-    let bodyPath = CGPath(roundedRect: chestBody, cornerWidth: 56, cornerHeight: 56, transform: nil)
-
-    // Lid seam — a hairline across the body, clipped to its rounded shape
-    cg.saveGState()
-    cg.addPath(bodyPath)
-    cg.clip()
-    cg.setFillColor(color(0x1E7F52, 0.32))
-    cg.fill(CGRect(x: chestBody.minX, y: 455, width: chestBody.width, height: 10))
-    cg.restoreGState()
-
-    // Keyhole — a filled circle with a stem dropping from it, below the seam.
-    // Two separate fills, so the overlap can't cancel under any winding rule.
-    cg.setFillColor(color(0x1E7F52, 0.5))
-    cg.fillEllipse(in: CGRect(x: 512 - 36, y: 350, width: 72, height: 72))
-    cg.addPath(CGPath(
-        roundedRect: CGRect(x: 512 - 20, y: 290, width: 40, height: 100),
-        cornerWidth: 20, cornerHeight: 20, transform: nil))
-    cg.fillPath()
 }
 
 /// Renders the complete icon at `px` and returns the bitmap.
@@ -224,6 +214,7 @@ func makeIcon(px: Int) -> NSBitmapImageRep {
         cg.scaleBy(x: scale, y: scale)
         drawIconBackground(cg)
     }
+    let backdrop = gaussianBlur(bgRep.cgImage!, radius: blurRadius)
 
     let shape = squircle(in: bgRect)
 
@@ -243,13 +234,13 @@ func makeIcon(px: Int) -> NSBitmapImageRep {
         cg.restoreGState()
     }
 
-    // Intermediate scene (background + shackle), so the chest's backdrop
-    // blur includes the shackle behind it — glass over glass.
+    // Intermediate scene (background + card), so the box's backdrop blur
+    // includes the card sinking into it — the kept copy ghosts through.
     let midRep = makeBitmap(px, px)
     withContext(midRep) { cg in
         cg.scaleBy(x: scale, y: scale)
         cg.draw(bgRep.cgImage!, in: designRect)
-        drawGlyph(cg) { drawShackle($0, boost: boost) }
+        drawGlyph(cg) { drawCard($0, backdrop: backdrop, boost: boost) }
     }
     let midBackdrop = gaussianBlur(midRep.cgImage!, radius: blurRadius)
 
@@ -257,7 +248,7 @@ func makeIcon(px: Int) -> NSBitmapImageRep {
     withContext(rep) { cg in
         cg.scaleBy(x: scale, y: scale)
         cg.draw(midRep.cgImage!, in: designRect)
-        drawGlyph(cg) { drawChest($0, backdrop: midBackdrop, boost: boost) }
+        drawGlyph(cg) { drawBox($0, backdrop: midBackdrop, boost: boost) }
     }
     return rep
 }
@@ -280,17 +271,21 @@ func makeIconLayer(_ draw: (CGContext) -> Void) -> NSBitmapImageRep {
     return rep
 }
 
-func drawFlatShackle(_ cg: CGContext) {
-    cg.addPath(shacklePath())
-    cg.setFillColor(color(0xFFFFFF, 0.5))
-    cg.fillPath()
+func drawFlatCard(_ cg: CGContext) {
+    withCardTilt(cg) { cg in
+        cg.addPath(CGPath(roundedRect: card, cornerWidth: 44, cornerHeight: 44, transform: nil))
+        cg.setFillColor(color(0xFFFFFF))
+        cg.fillPath()
+        drawCardContent(cg)
+    }
 }
 
-func drawFlatChest(_ cg: CGContext) {
-    cg.addPath(CGPath(roundedRect: chestBody, cornerWidth: 56, cornerHeight: 56, transform: nil))
-    cg.setFillColor(color(0xFFFFFF))
+func drawFlatBox(_ cg: CGContext) {
+    // Semi-transparent so the system's glass treatment keeps the card's
+    // lower half faintly visible through the box front.
+    cg.addPath(CGPath(roundedRect: boxBody, cornerWidth: 56, cornerHeight: 56, transform: nil))
+    cg.setFillColor(color(0xFFFFFF, 0.72))
     cg.fillPath()
-    drawChestFittings(cg)
 }
 
 // MARK: - Banner (1800 x 600)
@@ -407,8 +402,8 @@ savePNG(master, "Assets/icon-1024.png")
 
 // Icon Composer layers for the macOS 26+ .icon document
 try? fm.createDirectory(atPath: "Assets/AppIcon.icon/Assets", withIntermediateDirectories: true)
-savePNG(makeIconLayer(drawFlatShackle), "Assets/AppIcon.icon/Assets/back.png")
-savePNG(makeIconLayer(drawFlatChest), "Assets/AppIcon.icon/Assets/front.png")
+savePNG(makeIconLayer(drawFlatCard), "Assets/AppIcon.icon/Assets/back.png")
+savePNG(makeIconLayer(drawFlatBox), "Assets/AppIcon.icon/Assets/front.png")
 
 let bannerIcon = makeIcon(px: 728).cgImage!
 let banner = makeBitmap(1800, 600)
