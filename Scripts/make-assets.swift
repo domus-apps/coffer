@@ -151,8 +151,10 @@ func drawGlassPane(
 // bright hero, its content bars visible above the rim; the box in front is
 // milkier glass, so the card's lower half shows through only as a blurred
 // ghost — kept, not gone.
-let boxBody = CGRect(x: 252, y: 240, width: 520, height: 300)
-let card = CGRect(x: 352, y: 420, width: 320, height: 350)
+/* Nudged 22px above geometric center: the box carries the glyph's visual
+   weight at the bottom, so true centering reads as sitting low. */
+let boxBody = CGRect(x: 252, y: 262, width: 520, height: 300)
+let card = CGRect(x: 352, y: 442, width: 320, height: 350)
 
 /// The card leans a few degrees mid-drop — it's falling into the coffer,
 /// not feeding out of a printer.
