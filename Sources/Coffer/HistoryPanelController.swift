@@ -16,7 +16,7 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
         self.store = store
         panel = KeyCapturePanel(
             contentRect: NSRect(x: 0, y: 0, width: 360, height: 320),
-            styleMask: [.titled, .fullSizeContentView, .nonactivatingPanel],
+            styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: true
         )
@@ -37,18 +37,18 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
     }
 
     private func configurePanel() {
-        panel.titleVisibility = .hidden
-        panel.titlebarAppearsTransparent = true
+        /* Borderless + transparent: the Liquid Glass view below supplies the
+           whole visible shape, so it reads as a menu, not a window. */
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = true
         panel.isMovableByWindowBackground = true
         panel.isReleasedWhenClosed = false
         panel.hidesOnDeactivate = false
-        panel.level = .floating
+        panel.level = .popUpMenu
         /* Open on whatever Space (incl. full-screen apps) the user is on. */
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.delegate = self
-        for button in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
-            panel.standardWindowButton(button)?.isHidden = true
-        }
         panel.onCommit = { [weak self] in self?.copySelection() }
         panel.onCancel = { [weak self] in self?.panel.close() }
     }
@@ -78,22 +78,34 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
         emptyLabel.font = .systemFont(ofSize: 13)
         emptyLabel.translatesAutoresizingMaskIntoConstraints = false
 
-        let content = NSVisualEffectView()
-        content.material = .menu
-        content.state = .active
+        /* Real Liquid Glass — the same material context menus get on
+           macOS 26. The content view is clipped to the glass shape so the
+           scrolling list never pokes past the rounded corners. */
+        let content = NSView()
+        content.wantsLayer = true
+        content.layer?.cornerRadius = Self.cornerRadius
+        content.layer?.cornerCurve = .continuous
+        content.layer?.masksToBounds = true
         content.addSubview(scrollView)
         content.addSubview(emptyLabel)
-        panel.contentView = content
+
+        let glass = NSGlassEffectView()
+        glass.cornerRadius = Self.cornerRadius
+        glass.contentView = content
+        panel.contentView = glass
 
         NSLayoutConstraint.activate([
-            scrollView.topAnchor.constraint(equalTo: content.topAnchor, constant: 8),
-            scrollView.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -8),
+            scrollView.topAnchor.constraint(equalTo: content.topAnchor, constant: 6),
+            scrollView.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -6),
             scrollView.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: content.trailingAnchor),
             emptyLabel.centerXAnchor.constraint(equalTo: content.centerXAnchor),
             emptyLabel.centerYAnchor.constraint(equalTo: content.centerYAnchor),
         ])
     }
+
+    /* Matches the corner rounding of Tahoe's context menus. */
+    private static let cornerRadius: CGFloat = 18
 
     private func show() {
         tableView.reloadData()
@@ -108,6 +120,9 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
            handling while the frontmost app stays active underneath. */
         panel.makeKeyAndOrderFront(nil)
         panel.makeFirstResponder(tableView)
+        /* Transparent windows compute their shadow from content alpha;
+           recompute it for the freshly reloaded list. */
+        panel.invalidateShadow()
     }
 
     /* Context-menu-style placement (à la Maccy): the panel opens with its
