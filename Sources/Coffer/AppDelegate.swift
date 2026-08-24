@@ -40,7 +40,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func setUpStatusItem() {
-        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        /* A fixed length instead of squareLength: square items are as wide
+           as the menu bar is tall, which pads a ~18pt symbol with a lot of
+           dead space. 20pt hugs the icon while keeping its natural size —
+           the same width every Domus app uses. */
+        let item = NSStatusBar.system.statusItem(withLength: 20)
         item.button?.image = NSImage(
             systemSymbolName: "doc.on.clipboard", accessibilityDescription: "Coffer")
 
