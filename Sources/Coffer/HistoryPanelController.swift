@@ -240,16 +240,29 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
     }
 }
 
-/* The hairline ring that gives the glass card contrast against flat
-   backgrounds — the definition the window-server shadow's rim used to
-   supply. Drawn via updateLayer so the color tracks appearance changes. */
+/* The edge treatment system context menus get: a faint dark outline plus a
+   bright inner rim, which reads against light and dark backdrops alike.
+   Colors re-resolve on appearance changes via updateLayer. */
 private final class HairlineBorderView: NSView {
-    private let radius: CGFloat
+    private let outerRing = CALayer()
+    private let innerRing = CALayer()
 
     init(frame: NSRect, cornerRadius: CGFloat) {
-        radius = cornerRadius
         super.init(frame: frame)
         wantsLayer = true
+
+        outerRing.frame = bounds
+        outerRing.cornerRadius = cornerRadius
+        outerRing.borderWidth = 0.5
+
+        innerRing.frame = bounds.insetBy(dx: 0.5, dy: 0.5)
+        innerRing.cornerRadius = cornerRadius - 0.5
+        innerRing.borderWidth = 1
+
+        for ring in [outerRing, innerRing] {
+            ring.cornerCurve = .continuous
+            layer?.addSublayer(ring)
+        }
     }
 
     required init?(coder: NSCoder) {
@@ -259,15 +272,11 @@ private final class HairlineBorderView: NSView {
     override var wantsUpdateLayer: Bool { true }
 
     override func updateLayer() {
-        guard let layer else { return }
-        layer.cornerRadius = radius
-        layer.cornerCurve = .continuous
-        layer.borderWidth = 1
         let isDark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-        layer.borderColor =
-            isDark
-            ? NSColor.white.withAlphaComponent(0.18).cgColor
-            : NSColor.black.withAlphaComponent(0.10).cgColor
+        outerRing.borderColor =
+            NSColor.black.withAlphaComponent(isDark ? 0.5 : 0.15).cgColor
+        innerRing.borderColor =
+            NSColor.white.withAlphaComponent(isDark ? 0.25 : 0.5).cgColor
     }
 
     /* Purely decorative: never swallow clicks meant for the list. */
