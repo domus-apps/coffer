@@ -15,7 +15,7 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
     init(store: ClipboardStore) {
         self.store = store
         panel = KeyCapturePanel(
-            contentRect: NSRect(x: 0, y: 0, width: 480, height: 360),
+            contentRect: NSRect(x: 0, y: 0, width: 360, height: 320),
             styleMask: [.titled, .fullSizeContentView, .nonactivatingPanel],
             backing: .buffered,
             defer: true
@@ -110,18 +110,18 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
         panel.makeFirstResponder(tableView)
     }
 
-    /* Spotlight-style placement: centered on the screen the cursor is on,
-       a little above the vertical middle. */
+    /* Context-menu-style placement (à la Maccy): the panel opens with its
+       top-left corner at the mouse cursor, nudged back onto the screen when
+       the cursor sits near an edge. */
     private func position() {
         let mouse = NSEvent.mouseLocation
         let screen = NSScreen.screens.first { $0.frame.contains(mouse) } ?? NSScreen.main
         guard let frame = screen?.visibleFrame else { return }
         let size = panel.frame.size
-        panel.setFrameOrigin(
-            NSPoint(
-                x: frame.midX - size.width / 2,
-                y: frame.minY + (frame.height - size.height) * 0.62
-            ))
+        var origin = NSPoint(x: mouse.x, y: mouse.y - size.height)
+        origin.x = min(max(origin.x, frame.minX), frame.maxX - size.width)
+        origin.y = min(max(origin.y, frame.minY), frame.maxY - size.height)
+        panel.setFrameOrigin(origin)
     }
 
     private func copySelection() {
