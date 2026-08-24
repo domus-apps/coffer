@@ -14,8 +14,12 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
 
     init(store: ClipboardStore) {
         self.store = store
+        let margin = Self.shadowMargin
         panel = KeyCapturePanel(
-            contentRect: NSRect(x: 0, y: 0, width: 360, height: 320),
+            contentRect: NSRect(
+                x: 0, y: 0,
+                width: Self.glassSize.width + margin * 2,
+                height: Self.glassSize.height + margin * 2),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: true
@@ -41,7 +45,11 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
            whole visible shape, so it reads as a menu, not a window. */
         panel.isOpaque = false
         panel.backgroundColor = .clear
-        panel.hasShadow = true
+        /* No window-server shadow: it is snapshotted from content alpha at
+           unpredictable times and kept showing up square behind the rounded
+           glass. The shadow is drawn in-window instead (see the shadow view
+           in configureContent), which is deterministic. */
+        panel.hasShadow = false
         panel.isMovableByWindowBackground = true
         panel.isReleasedWhenClosed = false
         panel.hidesOnDeactivate = false
@@ -89,10 +97,34 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
         content.addSubview(scrollView)
         content.addSubview(emptyLabel)
 
-        let glass = NSGlassEffectView()
+        /* The glass sits inset in a transparent margin; a content-less layer
+           with an explicit rounded shadowPath supplies the menu shadow. The
+           panel is fixed-size, so plain frames beat Auto Layout here. */
+        let glassFrame = NSRect(
+            x: Self.shadowMargin, y: Self.shadowMargin,
+            width: Self.glassSize.width, height: Self.glassSize.height)
+
+        let shadow = NSView(frame: glassFrame)
+        shadow.wantsLayer = true
+        if let layer = shadow.layer {
+            layer.shadowColor = NSColor.black.cgColor
+            layer.shadowOpacity = 0.3
+            layer.shadowRadius = 16
+            layer.shadowOffset = CGSize(width: 0, height: -8)
+            layer.shadowPath = CGPath(
+                roundedRect: shadow.bounds,
+                cornerWidth: Self.cornerRadius, cornerHeight: Self.cornerRadius,
+                transform: nil)
+        }
+
+        let glass = NSGlassEffectView(frame: glassFrame)
         glass.cornerRadius = Self.cornerRadius
         glass.contentView = content
-        panel.contentView = glass
+
+        let root = NSView()
+        root.addSubview(shadow)
+        root.addSubview(glass)
+        panel.contentView = root
 
         NSLayoutConstraint.activate([
             scrollView.topAnchor.constraint(equalTo: content.topAnchor, constant: 6),
@@ -106,6 +138,10 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
 
     /* Matches the corner rounding of Tahoe's context menus. */
     private static let cornerRadius: CGFloat = 18
+    /* The visible glass card; the window is larger by shadowMargin on every
+       side so the in-window shadow has room to render. */
+    private static let glassSize = NSSize(width: 360, height: 320)
+    private static let shadowMargin: CGFloat = 40
 
     private func show() {
         tableView.reloadData()
@@ -120,27 +156,22 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
            handling while the frontmost app stays active underneath. */
         panel.makeKeyAndOrderFront(nil)
         panel.makeFirstResponder(tableView)
-        /* Transparent windows compute their shadow from content alpha.
-           Recompute only after the glass has actually rendered a frame —
-           doing it synchronously here bakes in a square-window shadow,
-           which shows up as clipped square corners behind the glass. */
-        DispatchQueue.main.async { [weak panel] in
-            panel?.invalidateShadow()
-        }
     }
 
-    /* Context-menu-style placement (à la Maccy): the panel opens with its
-       top-left corner at the mouse cursor, nudged back onto the screen when
-       the cursor sits near an edge. */
+    /* Context-menu-style placement (à la Maccy): the glass card opens with
+       its top-left corner at the mouse cursor, nudged back onto the screen
+       when the cursor sits near an edge. The window itself extends
+       shadowMargin past the card on every side. */
     private func position() {
         let mouse = NSEvent.mouseLocation
         let screen = NSScreen.screens.first { $0.frame.contains(mouse) } ?? NSScreen.main
         guard let frame = screen?.visibleFrame else { return }
-        let size = panel.frame.size
+        let size = Self.glassSize
         var origin = NSPoint(x: mouse.x, y: mouse.y - size.height)
         origin.x = min(max(origin.x, frame.minX), frame.maxX - size.width)
         origin.y = min(max(origin.y, frame.minY), frame.maxY - size.height)
-        panel.setFrameOrigin(origin)
+        panel.setFrameOrigin(
+            NSPoint(x: origin.x - Self.shadowMargin, y: origin.y - Self.shadowMargin))
     }
 
     private func copySelection() {
