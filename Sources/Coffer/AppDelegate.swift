@@ -25,6 +25,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ) { [weak self] in
             self?.historyPanel?.toggle()
         }
+
+        /* Dev hook: COFFER_DEBUG_PANEL=1 seeds the history and opens the
+           panel right away, so the palette can be eyeballed (and
+           screenshotted) without priming the real pasteboard. */
+        if ProcessInfo.processInfo.environment["COFFER_DEBUG_PANEL"] == "1" {
+            for sample in ["Third sample item", "Second sample item", "First sample item"] {
+                store.add(sample)
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                self?.historyPanel?.toggle()
+            }
+        }
     }
 
     private func setUpStatusItem() {

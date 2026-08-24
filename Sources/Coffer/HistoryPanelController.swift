@@ -120,9 +120,13 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
            handling while the frontmost app stays active underneath. */
         panel.makeKeyAndOrderFront(nil)
         panel.makeFirstResponder(tableView)
-        /* Transparent windows compute their shadow from content alpha;
-           recompute it for the freshly reloaded list. */
-        panel.invalidateShadow()
+        /* Transparent windows compute their shadow from content alpha.
+           Recompute only after the glass has actually rendered a frame —
+           doing it synchronously here bakes in a square-window shadow,
+           which shows up as clipped square corners behind the glass. */
+        DispatchQueue.main.async { [weak panel] in
+            panel?.invalidateShadow()
+        }
     }
 
     /* Context-menu-style placement (à la Maccy): the panel opens with its
@@ -196,6 +200,9 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
     // MARK: - NSWindowDelegate
 
     func windowDidResignKey(_ notification: Notification) {
+        /* The debug hook needs the panel to survive focus loss so it can be
+           screenshotted from a script; real runs dismiss like a menu. */
+        guard ProcessInfo.processInfo.environment["COFFER_DEBUG_PANEL"] != "1" else { return }
         panel.close()
     }
 }
