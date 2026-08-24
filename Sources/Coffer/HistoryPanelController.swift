@@ -124,6 +124,8 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
         let root = NSView()
         root.addSubview(shadow)
         root.addSubview(glass)
+        root.addSubview(
+            HairlineBorderView(frame: glassFrame, cornerRadius: Self.cornerRadius))
         panel.contentView = root
 
         NSLayoutConstraint.activate([
@@ -236,6 +238,40 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
         guard ProcessInfo.processInfo.environment["COFFER_DEBUG_PANEL"] != "1" else { return }
         panel.close()
     }
+}
+
+/* The hairline ring that gives the glass card contrast against flat
+   backgrounds — the definition the window-server shadow's rim used to
+   supply. Drawn via updateLayer so the color tracks appearance changes. */
+private final class HairlineBorderView: NSView {
+    private let radius: CGFloat
+
+    init(frame: NSRect, cornerRadius: CGFloat) {
+        radius = cornerRadius
+        super.init(frame: frame)
+        wantsLayer = true
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) is not used")
+    }
+
+    override var wantsUpdateLayer: Bool { true }
+
+    override func updateLayer() {
+        guard let layer else { return }
+        layer.cornerRadius = radius
+        layer.cornerCurve = .continuous
+        layer.borderWidth = 1
+        let isDark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        layer.borderColor =
+            isDark
+            ? NSColor.white.withAlphaComponent(0.18).cgColor
+            : NSColor.black.withAlphaComponent(0.10).cgColor
+    }
+
+    /* Purely decorative: never swallow clicks meant for the list. */
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
 
 /* A nonactivating panel that can take keyboard focus, intercepting Return
