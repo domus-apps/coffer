@@ -1,6 +1,8 @@
+import Foundation
+
 /// The pure history model behind the clipboard store: newest-first ordering,
-/// re-copy promotion, and a hard cap. The pasteboard watcher (not built yet)
-/// will feed copies into this; keeping it pure keeps it testable.
+/// re-copy promotion, and a hard cap. The pasteboard watcher feeds copies
+/// into this; keeping it pure keeps it testable.
 enum ClipboardHistory {
     /// Returns `history` with `item` as the newest entry.
     ///
@@ -16,5 +18,17 @@ enum ClipboardHistory {
             result.removeLast(result.count - limit)
         }
         return result
+    }
+
+    /// Collapses an item to a single display line for the history list:
+    /// runs of whitespace and newlines become one space, surrounding
+    /// whitespace is trimmed, and the result is capped at `maxLength`.
+    static func previewLine(for item: String, maxLength: Int = 300) -> String {
+        let collapsed =
+            item
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        return String(collapsed.prefix(maxLength))
     }
 }

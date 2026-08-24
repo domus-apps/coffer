@@ -25,3 +25,12 @@ import Testing
 @Test func nonPositiveLimitYieldsEmptyHistory() {
     #expect(ClipboardHistory.adding("a", to: ["b"], limit: 0) == [])
 }
+
+@Test func previewCollapsesWhitespaceRunsToSingleSpaces() {
+    #expect(ClipboardHistory.previewLine(for: "  a\n\n  b\tc ") == "a b c")
+}
+
+@Test func previewIsCappedAtMaxLength() {
+    let long = String(repeating: "x", count: 10)
+    #expect(ClipboardHistory.previewLine(for: long, maxLength: 4) == "xxxx")
+}

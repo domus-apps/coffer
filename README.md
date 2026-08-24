@@ -7,17 +7,15 @@
   A single dependency-free Swift Package — builds with the <code>swift</code> CLI alone, no Xcode project required.
 </p>
 
-> [!NOTE]
-> **Scaffold stage.** The project structure, build/dev/test scripts, asset pipeline, and the
-> menu bar app shell are in place; the clipboard engine itself is not built yet. See the
-> roadmap below for what comes next.
+## What it does
 
-## What it will do
-
-- Watch the pasteboard and keep a history of everything you copy.
-- Summon the history with a global shortcut, search it, and paste any entry.
-- Keep the history newest-first, promote re-copied items instead of duplicating them, and cap
-  the stored count — that pure model already exists in `ClipboardHistory.swift`, tests and all.
+- Watches the pasteboard and keeps a history of everything you copy (skipping entries that
+  password managers mark as concealed).
+- Press <kbd>⌘⌥C</kbd> anywhere to summon the history panel — <kbd>↑</kbd>/<kbd>↓</kbd> to pick
+  an entry, <kbd>↩</kbd> (or double-click) to copy it back to the clipboard,
+  <kbd>Esc</kbd> to dismiss.
+- Keeps the history newest-first, promotes re-copied items instead of duplicating them, and
+  caps the stored count — a pure model in `ClipboardHistory.swift`, tests and all.
 
 ## Building the app
 
@@ -44,16 +42,18 @@ Swift Testing needs full Xcode — Command Line Tools alone won't run it.
 
 ```
 Sources/Coffer/
-├── main.swift             # Entry point (accessory app, no Dock icon)
-├── AppDelegate.swift      # Menu bar item + app lifecycle
-└── ClipboardHistory.swift # Pure history model: ordering, promotion, cap (tested)
+├── main.swift                   # Entry point (accessory app, no Dock icon)
+├── AppDelegate.swift            # Menu bar item, hotkey + watcher wiring
+├── ClipboardHistory.swift       # Pure history model: ordering, promotion, cap (tested)
+├── ClipboardStore.swift         # App-side store around the model, change notifications
+├── PasteboardWatcher.swift      # changeCount polling, concealed-type filtering
+├── HotKeyCenter.swift           # Carbon RegisterEventHotKey wrapper (⌘⌥C)
+└── HistoryPanelController.swift # The floating history palette
 ```
 
 ## Roadmap
 
-- **Pasteboard watcher** — poll `NSPasteboard.general.changeCount` and feed new copies into
-  `ClipboardHistory`.
-- **History window** — a global-shortcut panel to search and paste past entries.
-- **Persistence** — survive relaunches; sensitive-content and app exclusions.
-- **Settings** — launch at login, history size, shortcuts (the System Settings–style sidebar
-  window the sibling apps use).
+- **Search** — type in the panel to filter the history.
+- **Persistence** — survive relaunches; app exclusions.
+- **Settings** — launch at login, history size, a recordable shortcut (the System
+  Settings–style sidebar window the sibling apps use).
