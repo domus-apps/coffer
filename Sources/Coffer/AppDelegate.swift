@@ -30,8 +30,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
            panel right away, so the palette can be eyeballed (and
            screenshotted) without priming the real pasteboard. */
         if ProcessInfo.processInfo.environment["COFFER_DEBUG_PANEL"] == "1" {
-            for sample in ["Third sample item", "Second sample item", "First sample item"] {
-                store.add(sample)
+            /* Enough entries that the list scrolls, so the edge fades can
+               be eyeballed too. */
+            for index in stride(from: 30, through: 1, by: -1) {
+                store.add(.text("Sample clipboard item \(index)"))
+            }
+            /* One of each media kind exercises the thumbnail paths. */
+            let sample = NSImage(size: NSSize(width: 120, height: 80), flipped: false) { rect in
+                NSColor.systemTeal.setFill()
+                rect.fill()
+                NSColor.white.setFill()
+                NSBezierPath(ovalIn: rect.insetBy(dx: 30, dy: 18)).fill()
+                return true
+            }
+            if let tiff = sample.tiffRepresentation,
+                let png = NSBitmapImageRep(data: tiff)?
+                    .representation(using: .png, properties: [:])
+            {
+                store.add(.image(png))
+            }
+            let manifest = URL(fileURLWithPath: "Package.swift")
+            if FileManager.default.fileExists(atPath: manifest.path) {
+                store.add(.files([manifest]))
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
                 self?.historyPanel?.toggle()

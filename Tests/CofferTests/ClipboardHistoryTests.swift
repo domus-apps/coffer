@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 
 @testable import Coffer
@@ -24,6 +25,35 @@ import Testing
 
 @Test func nonPositiveLimitYieldsEmptyHistory() {
     #expect(ClipboardHistory.adding("a", to: ["b"], limit: 0) == [])
+}
+
+@Test func filteringMatchesCaseInsensitiveSubstrings() {
+    let items: [ClipboardItem] = [.text("Hello World"), .text("swift build"), .text("hello there")]
+    #expect(
+        ClipboardHistory.filtering(items, with: "hello")
+            == [.text("Hello World"), .text("hello there")])
+}
+
+@Test func filteringKeepsOrderAndDropsNonMatches() {
+    let items: [ClipboardItem] = [.text("b1"), .text("a"), .text("b2")]
+    #expect(ClipboardHistory.filtering(items, with: "b") == [.text("b1"), .text("b2")])
+}
+
+@Test func emptyOrWhitespaceQueryMatchesEverything() {
+    let items: [ClipboardItem] = [.text("a"), .image(Data([1])), .files([URL(fileURLWithPath: "/tmp/a.png")])]
+    #expect(ClipboardHistory.filtering(items, with: "") == items)
+    #expect(ClipboardHistory.filtering(items, with: "  \n") == items)
+}
+
+@Test func imagesNeverMatchATextQuery() {
+    let items: [ClipboardItem] = [.text("image"), .image(Data([1]))]
+    #expect(ClipboardHistory.filtering(items, with: "image") == [.text("image")])
+}
+
+@Test func fileCopiesMatchByFileName() {
+    let report: ClipboardItem = .files([URL(fileURLWithPath: "/tmp/Report.pdf")])
+    let items: [ClipboardItem] = [report, .text("unrelated")]
+    #expect(ClipboardHistory.filtering(items, with: "report") == [report])
 }
 
 @Test func previewCollapsesWhitespaceRunsToSingleSpaces() {
