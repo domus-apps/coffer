@@ -4,6 +4,12 @@ All notable changes to Coffer are documented here. The release workflow publishe
 
 Keep each bullet on a single line: release notes render line breaks literally (both on GitHub and in the update dialog), so wrapped lines would break mid-sentence.
 
+## 1.1.0
+
+### Added
+
+- First-run onboarding that introduces the history palette and its ⌘⌥C shortcut.
+
 ## 1.0.0
 
 - Initial release: everything you copy, kept in a searchable history — press ⌘⌥C for a Liquid Glass palette, type to filter, and Return (or double-click) copies the selection back.
