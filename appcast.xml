@@ -25,5 +25,22 @@
         sparkle:edSignature="Nr9+cRYgQvLrNHs6LEtzCVXSQkxC7Bp/pLN/QLldvOUD3XqW6eyb3/M2N7oM381oO7pndaItQOVE9J6avDqJDA==" length="2891074"
         type="application/octet-stream"/>
     </item>
+    <item>
+      <title>Coffer v1.1.0</title>
+      <link>https://github.com/domus-apps/coffer/releases/tag/v1.1.0</link>
+      <pubDate>Wed, 26 Aug 2026 13:21:54 +0000</pubDate>
+      <description><![CDATA[
+<h3>Added</h3>
+<ul>
+<li>First-run onboarding that introduces the history palette and its ⌘⌥C shortcut.</li>
+</ul>      ]]></description>
+      <sparkle:version>2</sparkle:version>
+      <sparkle:shortVersionString>1.1.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+      <enclosure
+        url="https://github.com/domus-apps/coffer/releases/download/v1.1.0/Coffer.zip"
+        sparkle:edSignature="KvfHx5nK2Z+HrnKELzbyp6d4u6Tm1PZ+2xsyRfnxWUjjrpySDO6HG5DQRoh/+KGT8b4EaxP884rO1xhlm+5tDg==" length="2900846"
+        type="application/octet-stream"/>
+    </item>
   </channel>
 </rss>
