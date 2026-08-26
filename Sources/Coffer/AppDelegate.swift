@@ -8,9 +8,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let hotKeys = HotKeyCenter()
     private var watcher: PasteboardWatcher?
     private var historyPanel: HistoryPanelController?
+    private var onboardingController: OnboardingWindowController?
+
+    private static let onboardingCompletedKey = "onboarding.completed"
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setUpStatusItem()
+
+        /* Completion is only recorded when onboarding is finished properly,
+           so an interrupted (or force-quit) run shows it again. */
+        if !UserDefaults.standard.bool(forKey: Self.onboardingCompletedKey)
+            || CommandLine.arguments.contains("--onboarding")
+        {
+            showOnboarding()
+        }
 
         historyPanel = HistoryPanelController(store: store)
 
@@ -58,6 +69,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.historyPanel?.toggle()
             }
         }
+    }
+
+    private func showOnboarding() {
+        if onboardingController == nil {
+            onboardingController = OnboardingWindowController { [weak self] in
+                UserDefaults.standard.set(true, forKey: Self.onboardingCompletedKey)
+                self?.onboardingController = nil
+            }
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        onboardingController?.window?.makeKeyAndOrderFront(nil)
     }
 
     private func setUpStatusItem() {
