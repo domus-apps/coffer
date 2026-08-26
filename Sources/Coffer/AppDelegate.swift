@@ -4,6 +4,7 @@ import Carbon.HIToolbox
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
     private let store = ClipboardStore()
+    private let updater = UpdaterController()
     private let hotKeys = HotKeyCenter()
     private var watcher: PasteboardWatcher?
     private var historyPanel: HistoryPanelController?
@@ -81,6 +82,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         history.keyEquivalentModifierMask = [.command, .option]
         history.target = self
         menu.addItem(history)
+        menu.addItem(updater.makeMenuItem())
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(
             title: "Quit Coffer",

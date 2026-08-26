@@ -2,11 +2,11 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>CFBundleExecutable</key>
+	<string>Coffer</string>
 	<key>CFBundleIdentifier</key>
 	<string>com.jhaemin.coffer</string>
 	<key>CFBundleName</key>
-	<string>Coffer</string>
-	<key>CFBundleExecutable</key>
 	<string>Coffer</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
@@ -20,5 +20,9 @@
 	<true/>
 	<key>NSHighResolutionCapable</key>
 	<true/>
+	<key>SUFeedURL</key>
+	<string>https://raw.githubusercontent.com/domus-apps/coffer/main/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>231/UKP6u5LElqtTkMp2TwNDsr83lQSxVCiJ4UUMR7I=</string>
 </dict>
 </plist>
