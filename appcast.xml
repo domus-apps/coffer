@@ -5,5 +5,25 @@
   <channel>
     <title>Coffer</title>
     <link>https://github.com/domus-apps/coffer</link>
+    <item>
+      <title>Coffer v1.0.0</title>
+      <link>https://github.com/domus-apps/coffer/releases/tag/v1.0.0</link>
+      <pubDate>Wed, 26 Aug 2026 12:46:11 +0000</pubDate>
+      <description><![CDATA[
+<ul>
+<li>Initial release: everything you copy, kept in a searchable history — press ⌘⌥C for a Liquid Glass palette, type to filter, and Return (or double-click) copies the selection back.</li>
+<li>Images and file copies are kept too, with thumbnails (QuickLook previews for files) — re-copying restores the original bytes or the files themselves, not a rendering.</li>
+<li>The palette is resizable from its edges, remembers its size, dissolves rows softly under its sticky search field, and supports right-click Copy / Delete per item.</li>
+<li>Password manager entries (concealed pasteboard items) are never recorded, and the history stays in memory only.</li>
+<li>Sparkle keeps the app up to date.</li>
+</ul>      ]]></description>
+      <sparkle:version>1</sparkle:version>
+      <sparkle:shortVersionString>1.0.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+      <enclosure
+        url="https://github.com/domus-apps/coffer/releases/download/v1.0.0/Coffer.zip"
+        sparkle:edSignature="Nr9+cRYgQvLrNHs6LEtzCVXSQkxC7Bp/pLN/QLldvOUD3XqW6eyb3/M2N7oM381oO7pndaItQOVE9J6avDqJDA==" length="2891074"
+        type="application/octet-stream"/>
+    </item>
   </channel>
 </rss>
