@@ -13,6 +13,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private static let onboardingCompletedKey = "onboarding.completed"
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        /* A translocated launch relaunches itself from the real bundle —
+           nothing else must start in this doomed instance. */
+        if TranslocationHealer.healIfNeeded() { return }
+
         setUpStatusItem()
 
         /* Completion is only recorded when onboarding is finished properly,
