@@ -42,5 +42,21 @@
         sparkle:edSignature="KvfHx5nK2Z+HrnKELzbyp6d4u6Tm1PZ+2xsyRfnxWUjjrpySDO6HG5DQRoh/+KGT8b4EaxP884rO1xhlm+5tDg==" length="2900846"
         type="application/octet-stream"/>
     </item>
+    <item>
+      <title>Coffer v1.1.1</title>
+      <link>https://github.com/domus-apps/coffer/releases/tag/v1.1.1</link>
+      <pubDate>Thu, 27 Aug 2026 02:00:47 +0000</pubDate>
+      <description><![CDATA[
+<ul>
+<li>Fixed: installing by COPYING the app (instead of Finder-moving it) left it running from Gatekeeper's translocated read-only path, which blocked Sparkle updates — the app now detects this at launch, clears the quarantine flag, and relaunches itself from its real location.</li>
+</ul>      ]]></description>
+      <sparkle:version>3</sparkle:version>
+      <sparkle:shortVersionString>1.1.1</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+      <enclosure
+        url="https://github.com/domus-apps/coffer/releases/download/v1.1.1/Coffer.zip"
+        sparkle:edSignature="bgC9+Z6ii+SEYIvvH29vCSNmUK4m1WVuWO21mKjEhSCLrcSfvieAC/nj2bbitsQg8UDD7WUyQZI7q2jyvo74Cg==" length="2902704"
+        type="application/octet-stream"/>
+    </item>
   </channel>
 </rss>
