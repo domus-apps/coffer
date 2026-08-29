@@ -84,5 +84,22 @@
         sparkle:edSignature="SDn0aS1YxoQwzg2+35GSXGcla+qD4xibuOM5+i1J4BL5ajawSONu699HpkJk03XUIiiWaS2b4YdNw0K73uFpAg==" length="2934011"
         type="application/octet-stream"/>
     </item>
+    <item>
+      <title>Coffer v1.2.1</title>
+      <link>https://github.com/domus-apps/coffer/releases/tag/v1.2.1</link>
+      <pubDate>Sat, 29 Aug 2026 03:19:41 +0000</pubDate>
+      <description><![CDATA[
+<h3>Fixed</h3>
+<ul>
+<li>The dark-mode app icon rendered the coffer's front as a near-opaque slab, hiding the card sinking into it. The front pane now carries the suite's translucent-glass alpha, so the dark variant keeps its see-through story.</li>
+</ul>      ]]></description>
+      <sparkle:version>5</sparkle:version>
+      <sparkle:shortVersionString>1.2.1</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+      <enclosure
+        url="https://github.com/domus-apps/coffer/releases/download/v1.2.1/Coffer.zip"
+        sparkle:edSignature="J3zOAnYSkdbAacvkXPBGTwpR7PxQ6+lQfb+h41zjI//+dmmIm0dXjPmkulIH4nN/DdV3oWur/ucN793UqZgGAA==" length="2932145"
+        type="application/octet-stream"/>
+    </item>
   </channel>
 </rss>
