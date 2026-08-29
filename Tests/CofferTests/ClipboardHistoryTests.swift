@@ -33,6 +33,28 @@ import Testing
     #expect(ClipboardHistory.trimming(["a"], to: 0) == [])
 }
 
+@Test func persistenceRoundTripsEveryItemKind() throws {
+    let url = FileManager.default.temporaryDirectory
+        .appendingPathComponent("coffer-tests-\(UUID().uuidString)", isDirectory: true)
+        .appendingPathComponent("history.plist")
+    defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+
+    let items: [ClipboardItem] = [
+        .text("hello"),
+        .image(Data([0x89, 0x50, 0x4E, 0x47])),
+        .files([URL(fileURLWithPath: "/tmp/Report.pdf")]),
+    ]
+    let persistence = HistoryPersistence(fileURL: url)
+    persistence.save(items)
+    #expect(persistence.load() == items)
+}
+
+@Test func persistenceLoadsAnEmptyHistoryWhenNoFileExists() {
+    let url = FileManager.default.temporaryDirectory
+        .appendingPathComponent("coffer-missing-\(UUID().uuidString).plist")
+    #expect(HistoryPersistence(fileURL: url).load() == [])
+}
+
 @Test func historyLimitPreferenceClampsToItsBounds() {
     let range = AppPreferences.historyLimitRange
     #expect(AppPreferences.clampedHistoryLimit(range.lowerBound - 1) == range.lowerBound)

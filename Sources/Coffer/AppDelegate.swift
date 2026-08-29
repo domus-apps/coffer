@@ -3,7 +3,7 @@ import Carbon.HIToolbox
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
-    private let store = ClipboardStore()
+    private let store = ClipboardStore(persistence: HistoryPersistence())
     private let updater = UpdaterController()
     private let hotKeys = HotKeyCenter()
     private var watcher: PasteboardWatcher?
@@ -78,6 +78,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if CommandLine.arguments.contains("--settings") {
             openSettings()
         }
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        /* The debounced save would never fire once the process is gone. */
+        store.saveNow()
     }
 
     private func showOnboarding() {
