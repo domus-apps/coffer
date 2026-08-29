@@ -118,5 +118,22 @@
         sparkle:edSignature="ESMXdXo1U+VHSVPFWSB0rDNcRdUZcZ0mk5Tes5sLlZpnIcRbJPbXkWnYFQleNlUibgPVYIgLEwHLsQfSIIIBDw==" length="2896531"
         type="application/octet-stream"/>
     </item>
+    <item>
+      <title>Coffer v1.2.3</title>
+      <link>https://github.com/domus-apps/coffer/releases/tag/v1.2.3</link>
+      <pubDate>Sat, 29 Aug 2026 05:43:46 +0000</pubDate>
+      <description><![CDATA[
+<h3>Fixed</h3>
+<ul>
+<li>The card behind the coffer's front showed through as a sharp transparent silhouette in the dark-mode icon; the front now declares a blur material, so the card diffuses through it as a frosted glow — matching the light appearance.</li>
+</ul>      ]]></description>
+      <sparkle:version>7</sparkle:version>
+      <sparkle:shortVersionString>1.2.3</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+      <enclosure
+        url="https://github.com/domus-apps/coffer/releases/download/v1.2.3/Coffer.zip"
+        sparkle:edSignature="6jFJMIgnEoKIqKBUwStGbkrMH0MaMBMCzuqW3pP7IQb8/AZLp+XEl3unGWU546Uu0ARt83i8tBHuKqchxxWNAg==" length="2873797"
+        type="application/octet-stream"/>
+    </item>
   </channel>
 </rss>
