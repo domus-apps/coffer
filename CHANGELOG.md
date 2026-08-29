@@ -4,6 +4,12 @@ All notable changes to Coffer are documented here. The release workflow publishe
 
 Keep each bullet on a single line: release notes render line breaks literally (both on GitHub and in the update dialog), so wrapped lines would break mid-sentence.
 
+## 1.2.1
+
+### Fixed
+
+- The dark-mode app icon rendered the coffer's front as a near-opaque slab, hiding the card sinking into it. The front pane now carries the suite's translucent-glass alpha, so the dark variant keeps its see-through story.
+
 ## 1.2.0
 
 ### Added

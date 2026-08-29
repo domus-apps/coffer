@@ -283,10 +283,12 @@ func drawFlatCard(_ cg: CGContext) {
 }
 
 func drawFlatBox(_ cg: CGContext) {
-    // Semi-transparent so the system's glass treatment keeps the card's
-    // lower half faintly visible through the box front.
+    // 0.4, the suite's alpha for translucent panes: against the dark
+    // variant's near-black fill, anything much higher renders as a solid
+    // slab that hides the card's lower half — and the ghosting card is the
+    // icon's whole story.
     cg.addPath(CGPath(roundedRect: boxBody, cornerWidth: 56, cornerHeight: 56, transform: nil))
-    cg.setFillColor(color(0xFFFFFF, 0.72))
+    cg.setFillColor(color(0xFFFFFF, 0.4))
     cg.fillPath()
 }
 
