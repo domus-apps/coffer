@@ -58,5 +58,31 @@
         sparkle:edSignature="bgC9+Z6ii+SEYIvvH29vCSNmUK4m1WVuWO21mKjEhSCLrcSfvieAC/nj2bbitsQg8UDD7WUyQZI7q2jyvo74Cg==" length="2902704"
         type="application/octet-stream"/>
     </item>
+    <item>
+      <title>Coffer v1.2.0</title>
+      <link>https://github.com/domus-apps/coffer/releases/tag/v1.2.0</link>
+      <pubDate>Sat, 29 Aug 2026 01:56:03 +0000</pubDate>
+      <description><![CDATA[
+<h3>Added</h3>
+<ul>
+<li>The clipboard history now survives restarts: it is saved to an owner-only file under ~/Library/Application Support/Coffer and restored at launch. Concealed (password manager) items were never recorded, so nothing secret lands on disk.</li>
+<li>A Settings window (menu bar icon → Settings…) where the history cap is configurable — 10 to 1,000 items, 200 by default, with a reset button. Lowering the cap removes the oldest items immediately; the bounds exist because the whole history, images included, lives in memory.</li>
+</ul>
+<h3>Changed</h3>
+<ul>
+<li>The history panel's top fade now hugs the search field, like the System Settings sidebar, and scrolled items show through beneath the field with a frosted-glass blur.</li>
+</ul>
+<h3>Fixed</h3>
+<ul>
+<li>Rows at the bottom of the history panel no longer crop against an invisible boundary floating above the card's bottom edge — they dissolve into the edge itself.</li>
+</ul>      ]]></description>
+      <sparkle:version>4</sparkle:version>
+      <sparkle:shortVersionString>1.2.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+      <enclosure
+        url="https://github.com/domus-apps/coffer/releases/download/v1.2.0/Coffer.zip"
+        sparkle:edSignature="SDn0aS1YxoQwzg2+35GSXGcla+qD4xibuOM5+i1J4BL5ajawSONu699HpkJk03XUIiiWaS2b4YdNw0K73uFpAg==" length="2934011"
+        type="application/octet-stream"/>
+    </item>
   </channel>
 </rss>
