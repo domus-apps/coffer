@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var watcher: PasteboardWatcher?
     private var historyPanel: HistoryPanelController?
     private var onboardingController: OnboardingWindowController?
+    private var settingsWindowController: SettingsWindowController?
 
     private static let onboardingCompletedKey = "onboarding.completed"
 
@@ -73,6 +74,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.historyPanel?.toggle()
             }
         }
+
+        if CommandLine.arguments.contains("--settings") {
+            openSettings()
+        }
     }
 
     private func showOnboarding() {
@@ -108,6 +113,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         history.keyEquivalentModifierMask = [.command, .option]
         history.target = self
         menu.addItem(history)
+        let settings = NSMenuItem(
+            title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
+        settings.target = self
+        menu.addItem(settings)
         menu.addItem(updater.makeMenuItem())
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(
@@ -119,5 +128,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func showHistory() {
         historyPanel?.toggle()
+    }
+
+    @objc private func openSettings() {
+        if settingsWindowController == nil {
+            settingsWindowController = SettingsWindowController()
+        }
+        /* Accessory apps don't come forward on their own — activate first or
+           the window opens behind the current app. */
+        NSApp.activate(ignoringOtherApps: true)
+        settingsWindowController?.window?.makeKeyAndOrderFront(nil)
     }
 }

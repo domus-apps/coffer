@@ -20,6 +20,13 @@ enum ClipboardHistory {
         return result
     }
 
+    /// Returns `history` capped at `limit` by dropping the oldest entries —
+    /// what happens to an existing history when the cap is lowered in
+    /// Settings.
+    static func trimming<Item>(_ history: [Item], to limit: Int) -> [Item] {
+        Array(history.prefix(max(limit, 0)))
+    }
+
     /// Returns the items matching `query` (case- and diacritic-insensitive),
     /// preserving order: text by content, file copies by their names.
     /// Images only appear in an unfiltered list — they carry no text to

@@ -27,6 +27,20 @@ import Testing
     #expect(ClipboardHistory.adding("a", to: ["b"], limit: 0) == [])
 }
 
+@Test func trimmingDropsTheOldestEntries() {
+    #expect(ClipboardHistory.trimming(["c", "b", "a"], to: 2) == ["c", "b"])
+    #expect(ClipboardHistory.trimming(["a"], to: 3) == ["a"])
+    #expect(ClipboardHistory.trimming(["a"], to: 0) == [])
+}
+
+@Test func historyLimitPreferenceClampsToItsBounds() {
+    let range = AppPreferences.historyLimitRange
+    #expect(AppPreferences.clampedHistoryLimit(range.lowerBound - 1) == range.lowerBound)
+    #expect(AppPreferences.clampedHistoryLimit(range.upperBound + 1) == range.upperBound)
+    #expect(AppPreferences.clampedHistoryLimit(AppPreferences.defaultHistoryLimit)
+        == AppPreferences.defaultHistoryLimit)
+}
+
 @Test func filteringMatchesCaseInsensitiveSubstrings() {
     let items: [ClipboardItem] = [.text("Hello World"), .text("swift build"), .text("hello there")]
     #expect(

@@ -7,10 +7,26 @@ final class ClipboardStore {
     static let changed = Notification.Name("Coffer.ClipboardStoreChanged")
 
     private(set) var items: [ClipboardItem] = []
-    private let limit: Int
 
-    init(limit: Int = 200) {
+    private var limit: Int {
+        didSet {
+            guard limit != oldValue else { return }
+            let updated = ClipboardHistory.trimming(items, to: limit)
+            guard updated != items else { return }
+            items = updated
+            NotificationCenter.default.post(name: Self.changed, object: self)
+        }
+    }
+
+    init(limit: Int = AppPreferences.historyLimit) {
         self.limit = limit
+        /* Follow the preference live, so lowering the cap in Settings trims
+           the history right away instead of on the next copy. */
+        NotificationCenter.default.addObserver(
+            forName: AppPreferences.changed, object: nil, queue: .main
+        ) { [weak self] _ in
+            self?.limit = AppPreferences.historyLimit
+        }
     }
 
     func add(_ item: ClipboardItem) {
