@@ -4,6 +4,12 @@ All notable changes to Coffer are documented here. The release workflow publishe
 
 Keep each bullet on a single line: release notes render line breaks literally (both on GitHub and in the update dialog), so wrapped lines would break mid-sentence.
 
+## 1.2.3
+
+### Fixed
+
+- The card behind the coffer's front showed through as a sharp transparent silhouette in the dark-mode icon; the front now declares a blur material, so the card diffuses through it as a frosted glow — matching the light appearance.
+
 ## 1.2.2
 
 ### Fixed
