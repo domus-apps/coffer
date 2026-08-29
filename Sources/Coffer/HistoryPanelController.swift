@@ -138,7 +138,7 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
         /* Z-order, bottom-up: the list runs the full card height, the blur
            strip sits over it (so rows blur as they slide under), and the
            search field draws crisp on top of both. */
-        let blurStrip = ProgressiveBlurView(stripHeight: Self.searchAreaHeight)
+        let blurStrip = ProgressiveBlurView(stripHeight: Self.searchFieldBottom)
         blurStrip.translatesAutoresizingMaskIntoConstraints = false
         scrollView.onHeaderIntrusion = { [weak blurStrip] strength in
             blurStrip?.strength = strength
@@ -180,6 +180,7 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
         panel.contentView = root
 
         scrollView.stickyHeaderInset = Self.searchAreaHeight
+        scrollView.headerFadeTop = Self.searchFieldBottom
         NSLayoutConstraint.activate([
             searchField.topAnchor.constraint(equalTo: content.topAnchor, constant: 10),
             searchField.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 10),
@@ -190,9 +191,13 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
             blurStrip.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             blurStrip.trailingAnchor.constraint(equalTo: content.trailingAnchor),
             blurStrip.heightAnchor.constraint(
-                equalToConstant: Self.searchAreaHeight + FadingScrollView.headerFadeHeight),
+                equalToConstant: Self.searchFieldBottom + FadingScrollView.headerFadeHeight),
             scrollView.topAnchor.constraint(equalTo: content.topAnchor),
-            scrollView.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -6),
+            /* Full height: the list must reach the card's bottom edge so the
+               fade dissolves into it, instead of cropping against an inset
+               boundary floating above it. The 6pt rest gap lives in the
+               scroll view's bottom content inset instead. */
+            scrollView.bottomAnchor.constraint(equalTo: content.bottomAnchor),
             scrollView.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: content.trailingAnchor),
             emptyLabel.centerXAnchor.constraint(equalTo: content.centerXAnchor),
@@ -206,6 +211,9 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
        the first row at rest. The list scrolls underneath it (see
        stickyHeaderInset on FadingScrollView). */
     private static let searchAreaHeight: CGFloat = 44
+    /* The field's bottom edge (10pt top padding + 28pt field): where rows
+       must be fully hidden, and where the dissolve ramp hangs from. */
+    private static let searchFieldBottom: CGFloat = 38
     /* The visible glass card; the window is larger by shadowMargin on every
        side so the in-window shadow has room to render. The card is
        resizable by its right/bottom edges (see ResizeGripView) and the
@@ -275,9 +283,14 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
                 guard let self, let scrollView = self.tableView.enclosingScrollView
                 else { return }
-                scrollView.contentView.scroll(
-                    to: NSPoint(x: 0, y: -Self.searchAreaHeight + CGFloat(offset)))
-                scrollView.reflectScrolledClipView(scrollView.contentView)
+                let clip = scrollView.contentView
+                /* Constrained like a user scroll, so a huge offset means
+                   "all the way down" instead of sailing past the document. */
+                let proposed = NSRect(
+                    origin: NSPoint(x: 0, y: -Self.searchAreaHeight + CGFloat(offset)),
+                    size: clip.bounds.size)
+                clip.scroll(to: clip.constrainBoundsRect(proposed).origin)
+                scrollView.reflectScrolledClipView(clip)
             }
         }
     }
@@ -720,7 +733,7 @@ private final class ResizeGripView: NSView {
    if the private class or filter ever vanish, the view does nothing and
    the fade alone carries the effect. */
 private final class ProgressiveBlurView: NSView {
-    private static let maxRadius: Double = 8
+    private static let maxRadius: Double = 12
     private let stripHeight: CGFloat
     private var backdrop: CALayer?
     private let gradientMask = CAGradientLayer()
@@ -799,13 +812,21 @@ private final class ProgressiveBlurView: NSView {
    stays entirely un-faded while everything fits. */
 private final class FadingScrollView: NSScrollView {
     private static let fadeHeight: CGFloat = 16
-    /* The dissolve ramp below the sticky header — longer than the plain
-       bottom fade, so rows melt away over a visible gradient under the
-       search field instead of meeting a hard boundary. */
-    static let headerFadeHeight: CGFloat = 28
+    /* The dissolve ramp hanging from the header fade top — short, hugging
+       the search field the way the System Settings sidebar fade hugs its
+       search field. */
+    static let headerFadeHeight: CGFloat = 14
     /* How much scrolling fully engages the header fade: short, so a row
        tip never lingers half-visible behind the search field. */
     private static let headerEngageDistance: CGFloat = 8
+    /* How much of a row still shows through at the search field's bottom
+       edge when the fade is fully engaged — the glassy show-through; the
+       blur strip smears it so it reads as frosting, not clutter. */
+    private static let headerResidualAlpha: CGFloat = 0.45
+    /* Breathing room under the last row at rest. A content inset, not a
+       frame inset: the list itself must reach the card's bottom edge so
+       the bottom fade dissolves into it instead of cropping above it. */
+    private static let bottomRestInset: CGFloat = 6
     private let fadeMask = CAGradientLayer()
 
     /* Reports the header fade strength (0–1) as it changes, for the blur
@@ -814,15 +835,22 @@ private final class FadingScrollView: NSScrollView {
 
     /* Height reserved for a sticky header laid over the scroll view's top:
        the content starts below it at rest (via the content inset) but
-       scrolls underneath it, and the top fade zone covers the whole strip
-       so rows dissolve before they could show through behind the header. */
+       scrolls underneath it. */
     var stickyHeaderInset: CGFloat = 0 {
         didSet {
             automaticallyAdjustsContentInsets = false
             contentInsets = NSEdgeInsets(
-                top: stickyHeaderInset, left: 0, bottom: 0, right: 0)
+                top: stickyHeaderInset, left: 0, bottom: Self.bottomRestInset, right: 0)
             updateFades()
         }
+    }
+
+    /* Where rows stop being fully hidden and the dissolve ramp begins —
+       the search field's bottom edge, which can sit above the header
+       inset (the inset keeps a rest gap between field and first row that
+       the fade shouldn't extend into). Defaults to the full inset. */
+    var headerFadeTop: CGFloat? {
+        didSet { updateFades() }
     }
 
     override init(frame: NSRect) {
@@ -871,16 +899,17 @@ private final class FadingScrollView: NSScrollView {
         let bottom = strength(documentHeight - visible.maxY, over: Self.fadeHeight)
         onHeaderIntrusion?(top)
 
-        /* The header strip is uniformly dimmed (fully hidden once scrolling
-           passes headerEngageDistance); the ramp back to opaque is convex —
-           a mid stop recovers most visibility just below the field — so the
-           dissolve reads light instead of eating a whole row. The bottom
-           edge keeps its plain linear fade. */
+        /* The scroll-pocket treatment: rows sliding under the search field
+           keep a faint residual visibility — the progressive blur strip
+           turns that residue into the frosted show-through of glass — rising
+           from nothing at the card's top edge, then a short linear ramp
+           recovers full visibility right below the field (the System
+           Settings sidebar fade). The bottom edge keeps its plain fade. */
         let topAlpha = 1 - top
-        let midAlpha = topAlpha + (1 - topAlpha) * 0.65
-        let headerStop = stickyHeaderInset / height
-        let midStop = (stickyHeaderInset + Self.headerFadeHeight * 0.35) / height
-        let topFadeStop = (stickyHeaderInset + Self.headerFadeHeight) / height
+        let fieldAlpha = 1 - top * (1 - Self.headerResidualAlpha)
+        let fadeTop = headerFadeTop ?? stickyHeaderInset
+        let headerStop = fadeTop / height
+        let topFadeStop = (fadeTop + Self.headerFadeHeight) / height
 
         /* Tracks live scrolling: implicit animations would make the mask
            trail behind the rows. Re-attach the mask each pass — AppKit owns
@@ -894,15 +923,13 @@ private final class FadingScrollView: NSScrollView {
         fadeMask.frame = CGRect(origin: .zero, size: bounds.size)
         fadeMask.colors = [
             NSColor.black.withAlphaComponent(topAlpha).cgColor,
-            NSColor.black.withAlphaComponent(topAlpha).cgColor,
-            NSColor.black.withAlphaComponent(midAlpha).cgColor,
+            NSColor.black.withAlphaComponent(fieldAlpha).cgColor,
             NSColor.black.cgColor,
             NSColor.black.cgColor,
             NSColor.black.withAlphaComponent(1 - bottom).cgColor,
         ]
         fadeMask.locations = [
-            0, NSNumber(value: headerStop), NSNumber(value: midStop),
-            NSNumber(value: topFadeStop),
+            0, NSNumber(value: headerStop), NSNumber(value: topFadeStop),
             NSNumber(value: 1 - Self.fadeHeight / height), 1,
         ]
         CATransaction.commit()
