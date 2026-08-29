@@ -101,5 +101,22 @@
         sparkle:edSignature="J3zOAnYSkdbAacvkXPBGTwpR7PxQ6+lQfb+h41zjI//+dmmIm0dXjPmkulIH4nN/DdV3oWur/ucN793UqZgGAA==" length="2932145"
         type="application/octet-stream"/>
     </item>
+    <item>
+      <title>Coffer v1.2.2</title>
+      <link>https://github.com/domus-apps/coffer/releases/tag/v1.2.2</link>
+      <pubDate>Sat, 29 Aug 2026 04:07:12 +0000</pubDate>
+      <description><![CDATA[
+<h3>Fixed</h3>
+<ul>
+<li>The dark-mode icon lost its glass entirely: the previous fix dimmed the box image instead of declaring materials. The icon document now declares real Liquid Glass — specular highlights, and a translucent frosted box that blurs the card sinking behind it — so every appearance keeps the see-through story.</li>
+</ul>      ]]></description>
+      <sparkle:version>6</sparkle:version>
+      <sparkle:shortVersionString>1.2.2</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+      <enclosure
+        url="https://github.com/domus-apps/coffer/releases/download/v1.2.2/Coffer.zip"
+        sparkle:edSignature="ESMXdXo1U+VHSVPFWSB0rDNcRdUZcZ0mk5Tes5sLlZpnIcRbJPbXkWnYFQleNlUibgPVYIgLEwHLsQfSIIIBDw==" length="2896531"
+        type="application/octet-stream"/>
+    </item>
   </channel>
 </rss>
