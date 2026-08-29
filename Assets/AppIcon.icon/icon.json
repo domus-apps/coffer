@@ -6,14 +6,34 @@
     {
       "layers" : [
         {
+          "glass" : true,
           "image-name" : "front.png",
           "name" : "box"
-        },
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "specular" : true,
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.5
+      }
+    },
+    {
+      "layers" : [
         {
+          "glass" : true,
           "image-name" : "back.png",
           "name" : "card"
         }
-      ]
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "specular" : true
     }
   ],
   "supported-platforms" : {

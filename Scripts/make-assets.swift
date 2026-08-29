@@ -283,12 +283,13 @@ func drawFlatCard(_ cg: CGContext) {
 }
 
 func drawFlatBox(_ cg: CGContext) {
-    // 0.4, the suite's alpha for translucent panes: against the dark
-    // variant's near-black fill, anything much higher renders as a solid
-    // slab that hides the card's lower half — and the ghosting card is the
-    // icon's whole story.
+    // Solid: the see-through comes from the icon document, not the image —
+    // the box's group declares glass with translucency (icon.json), so the
+    // system renders it as frosted glass that blurs the card behind it, in
+    // every appearance. A translucent IMAGE instead would just dim into the
+    // dark variant's near-black fill with no glass treatment at all.
     cg.addPath(CGPath(roundedRect: boxBody, cornerWidth: 56, cornerHeight: 56, transform: nil))
-    cg.setFillColor(color(0xFFFFFF, 0.4))
+    cg.setFillColor(color(0xFFFFFF))
     cg.fillPath()
 }
 

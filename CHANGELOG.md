@@ -4,6 +4,12 @@ All notable changes to Coffer are documented here. The release workflow publishe
 
 Keep each bullet on a single line: release notes render line breaks literally (both on GitHub and in the update dialog), so wrapped lines would break mid-sentence.
 
+## 1.2.2
+
+### Fixed
+
+- The dark-mode icon lost its glass entirely: the previous fix dimmed the box image instead of declaring materials. The icon document now declares real Liquid Glass — specular highlights, and a translucent frosted box that blurs the card sinking behind it — so every appearance keeps the see-through story.
+
 ## 1.2.1
 
 ### Fixed
