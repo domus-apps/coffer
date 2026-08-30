@@ -135,5 +135,22 @@
         sparkle:edSignature="6jFJMIgnEoKIqKBUwStGbkrMH0MaMBMCzuqW3pP7IQb8/AZLp+XEl3unGWU546Uu0ARt83i8tBHuKqchxxWNAg==" length="2873797"
         type="application/octet-stream"/>
     </item>
+    <item>
+      <title>Coffer v1.2.4</title>
+      <link>https://github.com/domus-apps/coffer/releases/tag/v1.2.4</link>
+      <pubDate>Sun, 30 Aug 2026 01:39:10 +0000</pubDate>
+      <description><![CDATA[
+<h3>Added</h3>
+<ul>
+<li>Spotlight now finds the app by its Korean name and by what it does — 코퍼, 커퍼, 클립보드, and clipboard all match.</li>
+</ul>      ]]></description>
+      <sparkle:version>8</sparkle:version>
+      <sparkle:shortVersionString>1.2.4</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+      <enclosure
+        url="https://github.com/domus-apps/coffer/releases/download/v1.2.4/Coffer.zip"
+        sparkle:edSignature="gmnrA2iT3VpMCwGqlyES6T3BiC31w6suthBjcomGjQkaoXV+GHTkYcXX7SKzXuFOVD47LP5DgZlHXsrP0VnnAQ==" length="2873948"
+        type="application/octet-stream"/>
+    </item>
   </channel>
 </rss>
