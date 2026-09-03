@@ -152,5 +152,25 @@
         sparkle:edSignature="gmnrA2iT3VpMCwGqlyES6T3BiC31w6suthBjcomGjQkaoXV+GHTkYcXX7SKzXuFOVD47LP5DgZlHXsrP0VnnAQ==" length="2873948"
         type="application/octet-stream"/>
     </item>
+    <item>
+      <title>Coffer v1.2.5</title>
+      <link>https://github.com/domus-apps/coffer/releases/tag/v1.2.5</link>
+      <pubDate>Thu, 03 Sep 2026 13:25:59 +0000</pubDate>
+      <description xml:lang="en"><![CDATA[
+<ul>
+<li>Moving through a long list with the arrow keys keeps the highlighted entry clear of the top and bottom fades instead of tucking it underneath.</li>
+</ul>      ]]></description>
+      <description xml:lang="ko"><![CDATA[
+<ul>
+<li>긴 목록을 방향키로 오갈 때 선택한 항목이 위아래 페이드에 가려지지 않고 그 안쪽에 멈춥니다.</li>
+</ul>      ]]></description>
+      <sparkle:version>10</sparkle:version>
+      <sparkle:shortVersionString>1.2.5</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+      <enclosure
+        url="https://github.com/domus-apps/coffer/releases/download/v1.2.5/Coffer.zip"
+        sparkle:edSignature="SAfw+ec64OzDnhjeJn9QNpxnjzp1BtTihtGNrutxvxn4HDpQfSJKHTcZW3YFWmRoPZzfL46DPFuvlZSB1u0tAw==" length="2873931"
+        type="application/octet-stream"/>
+    </item>
   </channel>
 </rss>
