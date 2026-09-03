@@ -4,6 +4,10 @@ All notable changes to Coffer are documented here. The release workflow publishe
 
 Keep each bullet on a single line: release notes render line breaks literally (both on GitHub and in the update dialog), so wrapped lines would break mid-sentence.
 
+## 1.2.5
+
+- Moving through a long list with the arrow keys keeps the highlighted entry clear of the top and bottom fades instead of tucking it underneath.
+
 ## 1.2.4
 
 ### Added

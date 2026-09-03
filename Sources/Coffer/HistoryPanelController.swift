@@ -308,22 +308,31 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
         scrollRowIntoView(target)
     }
 
-    /* scrollRowToVisible replacement that knows about the sticky header:
-       to AppKit a row tucked behind the search field still counts as
-       visible, so the stock method would leave it there. */
+    /* scrollRowToVisible replacement that knows about the sticky header and
+       the edge fades: to AppKit a row tucked behind the search field still
+       counts as visible, so the stock method would leave it there — and a
+       row aligned flush with an edge sits inside the dissolve ramp, half
+       faded while it is the selection. Rows are brought in clear of both
+       ramps; at the ends of the list the clip's own clamping wins, where
+       the fades are off anyway. */
     private func scrollRowIntoView(_ row: Int) {
         guard let scrollView = tableView.enclosingScrollView else { return }
         let clip = scrollView.contentView
         let rowRect = tableView.rect(ofRow: row)
+        /* Where the header ramp ends, measured from the clip's top; and the
+           bottom ramp's height. */
+        let topClearance = Self.searchFieldBottom + FadingScrollView.headerFadeHeight
+        let bottomClearance = FadingScrollView.fadeHeight
         let offset: CGFloat
-        if rowRect.minY < clip.bounds.minY + Self.searchAreaHeight {
-            offset = rowRect.minY - Self.searchAreaHeight
-        } else if rowRect.maxY > clip.bounds.maxY {
-            offset = rowRect.maxY - clip.bounds.height
+        if rowRect.minY < clip.bounds.minY + topClearance {
+            offset = rowRect.minY - topClearance
+        } else if rowRect.maxY > clip.bounds.maxY - bottomClearance {
+            offset = rowRect.maxY - clip.bounds.height + bottomClearance
         } else {
             return
         }
-        clip.scroll(to: NSPoint(x: 0, y: offset))
+        let proposed = NSRect(origin: NSPoint(x: 0, y: offset), size: clip.bounds.size)
+        clip.scroll(to: clip.constrainBoundsRect(proposed).origin)
         scrollView.reflectScrolledClipView(clip)
     }
 
@@ -811,7 +820,7 @@ private final class ProgressiveBlurView: NSView {
    fade grows in smoothly with the first points of scrolling and the list
    stays entirely un-faded while everything fits. */
 private final class FadingScrollView: NSScrollView {
-    private static let fadeHeight: CGFloat = 16
+    static let fadeHeight: CGFloat = 16
     /* The dissolve ramp hanging from the header fade top — short, hugging
        the search field the way the System Settings sidebar fade hugs its
        search field. */
