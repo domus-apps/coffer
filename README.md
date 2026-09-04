@@ -57,3 +57,9 @@ Sources/Coffer/
 - **Persistence**: survive relaunches; app exclusions.
 - **Settings**: launch at login, history size, a recordable shortcut (the System
   Settings–style sidebar window the sibling apps use).
+
+## License
+
+MIT, see [LICENSE](LICENSE). Bundled third-party software and its licenses are listed in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+
+Inspired by [Maccy](https://github.com/p0deje/Maccy). No code is shared.
