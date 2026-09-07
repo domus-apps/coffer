@@ -172,5 +172,42 @@
         sparkle:edSignature="SAfw+ec64OzDnhjeJn9QNpxnjzp1BtTihtGNrutxvxn4HDpQfSJKHTcZW3YFWmRoPZzfL46DPFuvlZSB1u0tAw==" length="2873931"
         type="application/octet-stream"/>
     </item>
+    <item>
+      <title>Coffer v1.2.6</title>
+      <link>https://github.com/domus-apps/coffer/releases/tag/v1.2.6</link>
+      <pubDate>Mon, 07 Sep 2026 07:12:16 +0000</pubDate>
+      <description xml:lang="en"><![CDATA[
+<h2>1.2.6</h2>
+<h3>Fixed</h3>
+<ul>
+<li>Fixed steady processor use that began once Settings had been opened and went on after the window was closed.</li>
+</ul>
+<h2>1.2.5</h2>
+<ul>
+<li>Moving through a long list with the arrow keys keeps the highlighted entry clear of the top and bottom fades instead of tucking it underneath.</li>
+</ul>
+<h2>1.2.4</h2>
+<h3>Added</h3>
+<ul>
+<li>Spotlight now finds the app by its Korean name and by what it does: 코퍼, 커퍼, 클립보드, and clipboard all match.</li>
+</ul>      ]]></description>
+      <description xml:lang="ko"><![CDATA[
+<h2>1.2.6</h2>
+<h3>수정</h3>
+<ul>
+<li>설정 창을 한 번 열면 창을 닫은 뒤에도 CPU를 계속 사용하던 문제를 고쳤습니다.</li>
+</ul>
+<h2>1.2.5</h2>
+<ul>
+<li>긴 목록을 방향키로 오갈 때 선택한 항목이 위아래 페이드에 가려지지 않고 그 안쪽에 멈춥니다.</li>
+</ul>      ]]></description>
+      <sparkle:version>11</sparkle:version>
+      <sparkle:shortVersionString>1.2.6</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+      <enclosure
+        url="https://github.com/domus-apps/coffer/releases/download/v1.2.6/Coffer.zip"
+        sparkle:edSignature="4SvHFrEPMRbworqmo6UBp8cjRa887QwADOqfLOHGgCeQcFwTMVgl2HVbex+1mDEqn9Y6N5dqMzjj6vTHP+XtDA==" length="2873976"
+        type="application/octet-stream"/>
+    </item>
   </channel>
 </rss>
