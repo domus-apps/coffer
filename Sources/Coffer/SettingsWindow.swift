@@ -1,4 +1,6 @@
 import AppKit
+import ServiceManagement
+import SwiftUI
 
 // MARK: - Window
 
@@ -25,9 +27,10 @@ enum SettingsPane: Int, CaseIterable {
    disabled by macOS itself while the window is not resizable-by-content,
    matching native settings windows). */
 final class SettingsWindowController: NSWindowController {
-    private let splitViewController = SettingsSplitViewController()
+    private let splitViewController: SettingsSplitViewController
 
-    init() {
+    init(updater: UpdaterController) {
+        splitViewController = SettingsSplitViewController(updater: updater)
         let window = NSWindow(contentViewController: splitViewController)
         window.styleMask = [.titled, .closable, .miniaturizable, .fullSizeContentView]
         /* A toolbar (even an empty one) is required for the full-height
@@ -42,7 +45,7 @@ final class SettingsWindowController: NSWindowController {
         toolbar.displayMode = .iconOnly
         window.toolbar = toolbar
         window.isReleasedWhenClosed = false
-        window.setContentSize(NSSize(width: 640, height: 340))
+        window.setContentSize(NSSize(width: 640, height: 500))
         window.center()
 
         super.init(window: window)
@@ -63,10 +66,15 @@ final class SettingsSplitViewController: NSSplitViewController {
 
     private let sidebar = SettingsSidebarViewController()
     private let paneContainer = NSViewController()
-    private let generalPane = GeneralPaneViewController()
+    private let generalPane: NSViewController
     private var currentPane: NSViewController?
 
-    init() {
+    init(updater: UpdaterController) {
+        /* The pane is a SwiftUI grouped Form — the exact section-header +
+           rounded-box arrangement Xcode's settings use — hosted inside the
+           AppKit split chrome. */
+        let model = SettingsModel(updater: updater)
+        generalPane = NSHostingController(rootView: GeneralSettingsView(model: model))
         super.init(nibName: nil, bundle: nil)
 
         paneContainer.view = NSView()
@@ -241,101 +249,167 @@ final class SettingsSidebarViewController: NSViewController, NSTableViewDataSour
     }
 }
 
+// MARK: - SwiftUI bridge
+
+/* Preferences live in UserDefaults (via AppPreferences); this object just
+   republishes their change notification so SwiftUI re-reads, and carries the
+   pieces that aren't preferences (SMAppService, the updater). */
+final class SettingsModel: ObservableObject {
+    let updater: UpdaterController
+
+    init(updater: UpdaterController) {
+        self.updater = updater
+        NotificationCenter.default.addObserver(
+            forName: AppPreferences.changed, object: nil, queue: .main
+        ) { [weak self] _ in
+            self?.objectWillChange.send()
+        }
+    }
+
+    /* SMAppService needs a real app bundle; a bare `swift run` binary has
+       no bundle identifier to register. */
+    var isBundledApp: Bool { Bundle.main.bundleIdentifier != nil }
+
+    var launchAtLogin: Bool {
+        get { SMAppService.mainApp.status == .enabled }
+        set {
+            do {
+                if newValue {
+                    try SMAppService.mainApp.register()
+                } else {
+                    try SMAppService.mainApp.unregister()
+                }
+            } catch {
+                NSLog("Coffer: launch-at-login change failed: \(error)")
+            }
+            objectWillChange.send()
+        }
+    }
+
+    var versionLabel: String {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "dev"
+        let build = (info?["CFBundleVersion"] as? String).map { " (\($0))" } ?? ""
+        return version + build
+    }
+
+    func binding<Value>(
+        _ get: @escaping () -> Value, _ set: @escaping (Value) -> Void
+    ) -> Binding<Value> {
+        Binding(get: get, set: set)
+    }
+}
+
 // MARK: - General pane
 
-final class GeneralPaneViewController: NSViewController {
-    private lazy var limitField: NSTextField = {
-        let field = NSTextField(string: "\(AppPreferences.historyLimit)")
-        field.alignment = .right
-        field.target = self
-        field.action = #selector(limitFieldChanged)
-        /* Commit on focus loss too, so tabbing away doesn't silently drop
-           a typed value. */
-        (field.cell as? NSTextFieldCell)?.sendsActionOnEndEditing = true
-        return field
-    }()
+struct GeneralSettingsView: View {
+    @ObservedObject var model: SettingsModel
 
-    private lazy var limitStepper: NSStepper = {
-        let stepper = NSStepper()
-        stepper.minValue = Double(AppPreferences.historyLimitRange.lowerBound)
-        stepper.maxValue = Double(AppPreferences.historyLimitRange.upperBound)
-        stepper.increment = 10
-        stepper.valueWraps = false
-        stepper.integerValue = AppPreferences.historyLimit
-        stepper.target = self
-        stepper.action = #selector(limitStepperChanged)
-        return stepper
-    }()
+    var body: some View {
+        Form {
+            Section {
+                VStack(alignment: .leading, spacing: 3) {
+                    Toggle(
+                        "Launch at login",
+                        isOn: model.binding({ model.launchAtLogin }, { model.launchAtLogin = $0 })
+                    )
+                    .disabled(!model.isBundledApp)
+                    if !model.isBundledApp {
+                        Text("Available in the bundled app only (Scripts/bundle.sh).")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
 
-    private lazy var resetButton: NSButton = {
-        let button = NSButton(
-            title: "Reset to Default", target: self, action: #selector(resetLimit))
-        button.controlSize = .small
-        return button
-    }()
+                VStack(alignment: .leading, spacing: 3) {
+                    Toggle(
+                        "Hide menu bar icon",
+                        isOn: model.binding(
+                            { AppPreferences.isMenuBarIconHidden },
+                            { AppPreferences.isMenuBarIconHidden = $0 }))
+                    Text(
+                        "⌥⌘C still opens the history. While hidden, launch Coffer again to "
+                            + "open Settings. The app appears in the Dock only while this "
+                            + "window is open."
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+            }
 
-    private func note(_ text: String) -> NSTextField {
-        let note = NSTextField(wrappingLabelWithString: text)
-        note.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
-        note.textColor = .secondaryLabelColor
-        return note
+            Section {
+                HistoryLimitRow(model: model)
+            } header: {
+                Text("History")
+            } footer: {
+                let range = AppPreferences.historyLimitRange
+                Text(
+                    "Between \(range.lowerBound) and \(range.upperBound). The history lives "
+                        + "in memory, images in full, so a higher cap uses more RAM. Lowering "
+                        + "it removes the oldest items immediately.")
+            }
+
+            Section("Updates") {
+                LabeledContent("Version", value: model.versionLabel)
+                Button("Check for Updates…") {
+                    model.updater.checkForUpdates()
+                }
+                .disabled(!model.updater.canCheckForUpdates)
+            }
+        }
+        .formStyle(.grouped)
+    }
+}
+
+/* The cap is typed or stepped. Both paths funnel through AppPreferences,
+   which clamps, and the clamped value is written back to the field so
+   out-of-range input visibly snaps to the nearest bound. The text is kept
+   as a plain string: a number formatter's localized "1,000" would re-parse
+   as 1 on the next commit. */
+private struct HistoryLimitRow: View {
+    @ObservedObject var model: SettingsModel
+    @State private var text = "\(AppPreferences.historyLimit)"
+    @FocusState private var isEditing: Bool
+
+    var body: some View {
+        LabeledContent("Keep clipboard items") {
+            HStack(spacing: 6) {
+                TextField("", text: $text)
+                    .labelsHidden()
+                    .multilineTextAlignment(.trailing)
+                    .frame(width: 60)
+                    .focused($isEditing)
+                    .onSubmit(commitText)
+                    /* Commit on focus loss too, so tabbing away doesn't
+                       silently drop a typed value. */
+                    .onChange(of: isEditing) { _, editing in
+                        if !editing { commitText() }
+                    }
+                Stepper(
+                    "",
+                    value: model.binding(
+                        { AppPreferences.historyLimit }, { AppPreferences.historyLimit = $0 }),
+                    in: AppPreferences.historyLimitRange, step: 10
+                )
+                .labelsHidden()
+                Button("Reset to Default") {
+                    AppPreferences.historyLimit = AppPreferences.defaultHistoryLimit
+                }
+                .controlSize(.small)
+                .disabled(AppPreferences.historyLimit == AppPreferences.defaultHistoryLimit)
+            }
+        }
+        /* The stepper and the reset button change the stored value behind
+           the field's back; mirror it unless the user is mid-edit. */
+        .onReceive(model.objectWillChange) { _ in
+            if !isEditing { text = "\(AppPreferences.historyLimit)" }
+        }
     }
 
-    override func loadView() {
-        let limitRow = NSStackView(views: [
-            NSTextField(labelWithString: "Keep clipboard items:"), limitField, limitStepper,
-            resetButton,
-        ])
-        limitRow.orientation = .horizontal
-        limitField.widthAnchor.constraint(equalToConstant: 60).isActive = true
-        resetButton.isEnabled = AppPreferences.historyLimit != AppPreferences.defaultHistoryLimit
-
-        let range = AppPreferences.historyLimitRange
-        let limitNote = note(
-            "Between \(range.lowerBound) and \(range.upperBound). The history lives in "
-                + "memory — images in full — so a higher cap uses more RAM. Lowering it "
-                + "removes the oldest items immediately.")
-
-        let stack = NSStackView(views: [limitRow, limitNote])
-        stack.orientation = .vertical
-        stack.alignment = .leading
-        stack.spacing = 8
-        stack.translatesAutoresizingMaskIntoConstraints = false
-
-        let container = NSView()
-        container.addSubview(stack)
-        NSLayoutConstraint.activate([
-            stack.topAnchor.constraint(
-                equalTo: container.safeAreaLayoutGuide.topAnchor, constant: 20),
-            stack.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 24),
-            stack.trailingAnchor.constraint(
-                lessThanOrEqualTo: container.trailingAnchor, constant: -24),
-            limitNote.widthAnchor.constraint(lessThanOrEqualToConstant: 400),
-        ])
-        view = container
-    }
-
-    @objc private func limitFieldChanged() {
-        applyLimit(limitField.integerValue)
-    }
-
-    @objc private func limitStepperChanged() {
-        applyLimit(limitStepper.integerValue)
-    }
-
-    @objc private func resetLimit() {
-        applyLimit(AppPreferences.defaultHistoryLimit)
-    }
-
-    /* Both controls funnel through here: the preference clamps, and the
-       clamped value is written back so out-of-range input visibly snaps
-       to the nearest bound. Written as a plain string — integerValue's
-       localized "1,000" would re-parse as 1 on the next commit. */
-    private func applyLimit(_ proposed: Int) {
-        AppPreferences.historyLimit = proposed
-        let applied = AppPreferences.historyLimit
-        limitField.stringValue = "\(applied)"
-        limitStepper.integerValue = applied
-        resetButton.isEnabled = applied != AppPreferences.defaultHistoryLimit
+    private func commitText() {
+        if let proposed = Int(text.trimmingCharacters(in: .whitespaces)) {
+            AppPreferences.historyLimit = proposed
+        }
+        text = "\(AppPreferences.historyLimit)"
     }
 }

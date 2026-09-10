@@ -6,6 +6,15 @@ enum AppPreferences {
     static let changed = Notification.Name("Coffer.PreferencesChanged")
 
     private static let historyLimitKey = "pref.historyLimit"
+    private static let hideMenuBarIconKey = "pref.hideMenuBarIcon"
+
+    static var isMenuBarIconHidden: Bool {
+        get { UserDefaults.standard.bool(forKey: hideMenuBarIconKey) }
+        set {
+            UserDefaults.standard.set(newValue, forKey: hideMenuBarIconKey)
+            NotificationCenter.default.post(name: changed, object: nil)
+        }
+    }
 
     /* The whole history lives in memory, and image entries keep their full
        PNG data, so the cap is bounded on both sides: below 10 the manager
