@@ -3,7 +3,12 @@ import Carbon.HIToolbox
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
-    private let store = ClipboardStore(persistence: HistoryPersistence())
+    /* The COFFER_DEBUG_PANEL hook seeds sample items; those must never reach
+       the real history on disk (they once did, and pushed real entries out
+       past the cap), so that mode runs on an in-memory store. */
+    private let store = ClipboardStore(
+        persistence: ProcessInfo.processInfo.environment["COFFER_DEBUG_PANEL"] == "1"
+            ? nil : HistoryPersistence())
     private let updater = UpdaterController()
     private let hotKeys = HotKeyCenter()
     private var watcher: PasteboardWatcher?
