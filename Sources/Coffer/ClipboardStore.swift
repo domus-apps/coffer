@@ -49,6 +49,14 @@ final class ClipboardStore {
         didChange()
     }
 
+    /// Wipes the whole history. A no-op on an empty store, so observers
+    /// hear about real changes only, like `add` and `remove`.
+    func clear() {
+        guard !items.isEmpty else { return }
+        items = []
+        didChange()
+    }
+
     /// Flushes any debounced save synchronously — for app termination,
     /// where the delayed write would never fire.
     func saveNow() {

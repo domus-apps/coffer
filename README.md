@@ -13,7 +13,8 @@
   password managers mark as concealed).
 - Press <kbd>⌘⌥C</kbd> anywhere to summon the history panel, <kbd>↑</kbd>/<kbd>↓</kbd> to pick
   an entry, <kbd>↩</kbd> (or double-click) to copy it back to the clipboard,
-  <kbd>Esc</kbd> to dismiss.
+  <kbd>Esc</kbd> to dismiss. The trash button beside the search field wipes the whole
+  history, after asking once.
 - Keeps the history newest-first, promotes re-copied items instead of duplicating them, and
   caps the stored count, a pure model in `ClipboardHistory.swift`, tests and all.
 
@@ -55,8 +56,7 @@ Sources/Coffer/
 
 - **Search**: type in the panel to filter the history.
 - **Persistence**: survive relaunches; app exclusions.
-- **Settings**: launch at login, history size, a recordable shortcut (the System
-  Settings–style sidebar window the sibling apps use).
+- **Settings**: a recordable shortcut for the history panel.
 
 ## License
 

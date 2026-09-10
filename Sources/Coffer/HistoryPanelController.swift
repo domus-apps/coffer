@@ -6,7 +6,8 @@ import QuickLookThumbnailing
    newest-first under a sticky search field. Typing filters the list live,
    ↑/↓ move the selection, Return (or a double-click) copies it back to the
    pasteboard, Escape clears the search — or, already empty, dismisses (as
-   does clicking elsewhere). */
+   does clicking elsewhere). A trash button beside the search field offers
+   Clear History, confirmed inside the panel itself. */
 final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableViewDelegate,
     NSWindowDelegate, NSSearchFieldDelegate, NSMenuDelegate
 {
@@ -15,6 +16,15 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
     private let tableView = NSTableView()
     private let searchField = NSSearchField()
     private let emptyLabel = NSTextField(labelWithString: "")
+    private let scrollView = FadingScrollView()
+    private let blurStrip = ProgressiveBlurView(
+        stripHeight: HistoryPanelController.searchFieldBottom)
+    /* Clear History, and the confirmation that replaces the whole list
+       while the question is up. */
+    private let clearButton = NSButton()
+    private let confirmView = NSStackView()
+    private let confirmLabel = NSTextField(labelWithString: "")
+    private var isConfirmingClear = false
     /* What the table shows: the store filtered by the current query. The
        search field owns key focus, so the table renders every row in its
        unemphasized (gray-pill) style unless told otherwise — hence the row
@@ -71,7 +81,7 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
         /* Open on whatever Space (incl. full-screen apps) the user is on. */
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.delegate = self
-        panel.onCommit = { [weak self] in self?.copySelection() }
+        panel.onCommit = { [weak self] in self?.commit() }
         panel.onCancel = { [weak self] in self?.cancel() }
         panel.onMoveSelection = { [weak self] delta in self?.moveSelection(by: delta) }
     }
@@ -108,7 +118,6 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
         contextMenu.addItem(deleteItem)
         tableView.menu = contextMenu
 
-        let scrollView = FadingScrollView()
         scrollView.documentView = tableView
         scrollView.hasVerticalScroller = true
         scrollView.autohidesScrollers = true
@@ -127,6 +136,48 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
         searchField.delegate = self
         searchField.translatesAutoresizingMaskIntoConstraints = false
 
+        /* Clear History: a bare trash glyph at the search field's right,
+           the field's height, in the same secondary tone as the field's
+           own icon. Dimmed rather than removed when there's nothing to
+           clear, so the header never shifts. */
+        clearButton.image = NSImage(
+            systemSymbolName: "trash", accessibilityDescription: "Clear History")?
+            .withSymbolConfiguration(.init(pointSize: 13, weight: .medium))
+        clearButton.imagePosition = .imageOnly
+        clearButton.isBordered = false
+        clearButton.contentTintColor = .secondaryLabelColor
+        clearButton.toolTip = "Clear History"
+        clearButton.setAccessibilityLabel("Clear History")
+        clearButton.target = self
+        clearButton.action = #selector(clearHistoryClicked)
+        clearButton.translatesAutoresizingMaskIntoConstraints = false
+
+        /* The confirmation takes the list's place rather than opening an
+           alert: a second window would take key status from this
+           nonactivating panel and close it (see windowDidResignKey). Return
+           confirms, Escape cancels — routed through the panel, so the
+           default-button key equivalent below only supplies the look. */
+        confirmLabel.font = .systemFont(ofSize: 13)
+        confirmLabel.alignment = .center
+        let cancelButton = NSButton(
+            title: "Cancel", target: self, action: #selector(cancelClearClicked))
+        cancelButton.bezelStyle = .rounded
+        let confirmButton = NSButton(
+            title: "Clear", target: self, action: #selector(confirmClearClicked))
+        confirmButton.bezelStyle = .rounded
+        confirmButton.keyEquivalent = "\r"
+        confirmButton.hasDestructiveAction = true
+        let confirmButtons = NSStackView(views: [cancelButton, confirmButton])
+        confirmButtons.orientation = .horizontal
+        confirmButtons.spacing = 8
+        confirmView.orientation = .vertical
+        confirmView.alignment = .centerX
+        confirmView.spacing = 12
+        confirmView.addView(confirmLabel, in: .center)
+        confirmView.addView(confirmButtons, in: .center)
+        confirmView.isHidden = true
+        confirmView.translatesAutoresizingMaskIntoConstraints = false
+
         /* Real Liquid Glass — the same material context menus get on
            macOS 26. The content view is clipped to the glass shape so the
            scrolling list never pokes past the rounded corners. */
@@ -138,7 +189,6 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
         /* Z-order, bottom-up: the list runs the full card height, the blur
            strip sits over it (so rows blur as they slide under), and the
            search field draws crisp on top of both. */
-        let blurStrip = ProgressiveBlurView(stripHeight: Self.searchFieldBottom)
         blurStrip.translatesAutoresizingMaskIntoConstraints = false
         scrollView.onHeaderIntrusion = { [weak blurStrip] strength in
             blurStrip?.strength = strength
@@ -147,6 +197,8 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
         content.addSubview(blurStrip)
         content.addSubview(searchField)
         content.addSubview(emptyLabel)
+        content.addSubview(clearButton)
+        content.addSubview(confirmView)
 
         /* The glass sits inset in a transparent margin; a content-less layer
            with an explicit rounded shadowPath supplies the menu shadow.
@@ -185,8 +237,12 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
             searchField.topAnchor.constraint(equalTo: content.topAnchor, constant: 10),
             searchField.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 10),
             searchField.trailingAnchor.constraint(
-                equalTo: content.trailingAnchor, constant: -10),
+                equalTo: clearButton.leadingAnchor, constant: -6),
             searchField.heightAnchor.constraint(equalToConstant: 28),
+            clearButton.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -10),
+            clearButton.centerYAnchor.constraint(equalTo: searchField.centerYAnchor),
+            clearButton.widthAnchor.constraint(equalToConstant: 28),
+            clearButton.heightAnchor.constraint(equalToConstant: 28),
             blurStrip.topAnchor.constraint(equalTo: content.topAnchor),
             blurStrip.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             blurStrip.trailingAnchor.constraint(equalTo: content.trailingAnchor),
@@ -202,7 +258,10 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
             scrollView.trailingAnchor.constraint(equalTo: content.trailingAnchor),
             emptyLabel.centerXAnchor.constraint(equalTo: content.centerXAnchor),
             emptyLabel.centerYAnchor.constraint(equalTo: content.centerYAnchor),
+            confirmView.centerXAnchor.constraint(equalTo: content.centerXAnchor),
+            confirmView.centerYAnchor.constraint(equalTo: content.centerYAnchor),
         ])
+        updateEmptyState()
     }
 
     /* Matches the corner rounding of Tahoe's context menus. */
@@ -260,7 +319,9 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
     }
 
     private func show() {
-        /* Each open starts fresh, like a menu: no leftover query. */
+        /* Each open starts fresh, like a menu: no leftover query, no
+           pending confirmation. */
+        endClearConfirmation()
         searchField.stringValue = ""
         refilter()
         tableView.sizeLastColumnToFit()
@@ -316,7 +377,6 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
        ramps; at the ends of the list the clip's own clamping wins, where
        the fades are off anyway. */
     private func scrollRowIntoView(_ row: Int) {
-        guard let scrollView = tableView.enclosingScrollView else { return }
         let clip = scrollView.contentView
         let rowRect = tableView.rect(ofRow: row)
         /* Where the header ramp ends, measured from the clip's top; and the
@@ -341,16 +401,27 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
     }
 
     private func moveSelection(by delta: Int) {
-        guard !filteredItems.isEmpty else { return }
+        guard !isConfirmingClear, !filteredItems.isEmpty else { return }
         let row = min(max(tableView.selectedRow + delta, 0), filteredItems.count - 1)
         tableView.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
         scrollRowIntoView(row)
     }
 
-    /* Escape backs out one level at a time: first the query, then the
-       panel. */
+    /* Return answers the confirmation while it's up; otherwise it copies. */
+    private func commit() {
+        if isConfirmingClear {
+            performClear()
+        } else {
+            copySelection()
+        }
+    }
+
+    /* Escape backs out one level at a time: the confirmation, then the
+       query, then the panel. */
     private func cancel() {
-        if searchField.stringValue.isEmpty {
+        if isConfirmingClear {
+            endClearConfirmation()
+        } else if searchField.stringValue.isEmpty {
             panel.close()
         } else {
             searchField.stringValue = ""
@@ -410,6 +481,62 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
         store.remove(filteredItems[row])
     }
 
+    // MARK: - Clear history
+
+    @objc private func clearHistoryClicked() {
+        beginClearConfirmation()
+    }
+
+    @objc private func cancelClearClicked() {
+        endClearConfirmation()
+    }
+
+    @objc private func confirmClearClicked() {
+        performClear()
+    }
+
+    /* Swap the list for the question. Focus leaves the (hidden) search
+       field and the panel swallows typing, so keys can't edit the query
+       behind the confirmation; Return and Escape still arrive through the
+       panel's own routing. */
+    private func beginClearConfirmation() {
+        guard !isConfirmingClear, !store.items.isEmpty else { return }
+        isConfirmingClear = true
+        panel.makeFirstResponder(nil)
+        panel.capturesAllKeys = true
+        updateConfirmLabel()
+        for view in [scrollView, blurStrip, searchField, clearButton] as [NSView] {
+            view.isHidden = true
+        }
+        updateEmptyState()
+        confirmView.isHidden = false
+    }
+
+    private func endClearConfirmation() {
+        guard isConfirmingClear else { return }
+        isConfirmingClear = false
+        confirmView.isHidden = true
+        for view in [scrollView, blurStrip, searchField, clearButton] as [NSView] {
+            view.isHidden = false
+        }
+        updateEmptyState()
+        panel.capturesAllKeys = false
+        panel.makeFirstResponder(searchField)
+    }
+
+    /* The panel stays open, like Delete: storeChanged lands on the
+       "Nothing copied yet" placeholder and the trash button dimmed. */
+    private func performClear() {
+        endClearConfirmation()
+        store.clear()
+    }
+
+    private func updateConfirmLabel() {
+        let count = store.items.count
+        confirmLabel.stringValue =
+            count == 1 ? "Clear the only item?" : "Clear all \(count) items?"
+    }
+
     func menuWillOpen(_ menu: NSMenu) {
         isContextMenuOpen = true
     }
@@ -428,9 +555,12 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
 
     private var isContextMenuOpen = false
 
+    /* The placeholder and the trash button both follow the store: nothing
+       to show and nothing to clear when it's empty. */
     private func updateEmptyState() {
-        emptyLabel.isHidden = !filteredItems.isEmpty
+        emptyLabel.isHidden = !filteredItems.isEmpty || isConfirmingClear
         emptyLabel.stringValue = store.items.isEmpty ? "Nothing copied yet" : "No Results"
+        clearButton.isEnabled = !store.items.isEmpty
     }
 
     @objc private func rowDoubleClicked() {
@@ -440,6 +570,15 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
     @objc private func storeChanged() {
         guard panel.isVisible else { return }
         refilter(selectingRow: tableView.selectedRow)
+        /* A copy can land mid-confirmation: keep the count honest, and
+           drop the question if there's nothing left to clear. */
+        if isConfirmingClear {
+            if store.items.isEmpty {
+                endClearConfirmation()
+            } else {
+                updateConfirmLabel()
+            }
+        }
     }
 
     // MARK: - NSTableViewDataSource / Delegate
@@ -1006,6 +1145,9 @@ private final class KeyCapturePanel: NSPanel {
     var onCommit: (() -> Void)?
     var onCancel: (() -> Void)?
     var onMoveSelection: ((Int) -> Void)?
+    /* While a confirmation is up, plain typing is dropped instead of
+       reaching the hidden search field; the routed keys above still work. */
+    var capturesAllKeys = false
 
     override var canBecomeKey: Bool { true }
 
@@ -1025,7 +1167,7 @@ private final class KeyCapturePanel: NSPanel {
                 onMoveSelection?(1)
                 return
             default:
-                break
+                if capturesAllKeys { return }
             }
         }
         super.sendEvent(event)
