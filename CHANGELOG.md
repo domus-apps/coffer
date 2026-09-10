@@ -4,6 +4,23 @@ All notable changes to Coffer are documented here. The release workflow publishe
 
 Keep each bullet on a single line: release notes render line breaks literally (both on GitHub and in the update dialog), so wrapped lines would break mid-sentence.
 
+## 1.3.0
+
+### Added
+
+- Coffer can launch at login, from Settings.
+- The menu bar icon can be hidden, from Settings. With it hidden, ⌥⌘C still opens the history, and launching Coffer again opens Settings.
+- A trash button beside the search field clears the whole history, after asking once.
+
+### Changed
+
+- Settings is laid out in grouped sections, like System Settings.
+
+### Fixed
+
+- ⌘W closes and ⌘Q quits from the Settings window.
+- Text on the highlighted row in the welcome window is readable with a yellow accent color.
+
 ## 1.2.6
 
 ### Fixed
