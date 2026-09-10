@@ -102,8 +102,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 UserDefaults.standard.set(true, forKey: Self.onboardingCompletedKey)
                 self?.onboardingController = nil
             }
+            observeClose(of: onboardingController?.window)
         }
-        NSApp.activate(ignoringOtherApps: true)
+        comeForward()
         onboardingController?.window?.makeKeyAndOrderFront(nil)
     }
 
@@ -177,6 +178,56 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settingsWindowController?.window?.isVisible == true
     }
 
+    /* Activation hand-back. An accessory app that activates itself to show
+       a window stays the active app after that window closes — macOS never
+       moves activation on window close — so a windowless Coffer would be left
+       frontmost until the user clicked elsewhere. Anything keyed off the
+       frontmost app then misbehaves (Atrium's Option+` lists the front app's
+       windows and finds none; plain keys beep). Remember who was active
+       before we came forward and give activation back once our last window
+       is gone. */
+    private var previouslyActiveApp: NSRunningApplication?
+
+    private func comeForward() {
+        if !NSApp.isActive,
+            let front = NSWorkspace.shared.frontmostApplication,
+            front.processIdentifier != ProcessInfo.processInfo.processIdentifier
+        {
+            previouslyActiveApp = front
+        }
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    private func handBackActivationIfWindowless() {
+        guard NSApp.isActive, settingsWindowController?.window?.isVisible != true,
+            onboardingController?.window?.isVisible != true
+        else { return }
+        let previous = previouslyActiveApp
+        previouslyActiveApp = nil
+        if let previous, !previous.isTerminated,
+            previous.activate(from: .current, options: [])
+        {
+            return
+        }
+        /* No one to hand back to (quit meanwhile): hiding yields activation
+           to whatever the system picks next. */
+        NSApp.hide(nil)
+    }
+
+    private func observeClose(of window: NSWindow?) {
+        guard let window else { return }
+        NotificationCenter.default.addObserver(
+            forName: NSWindow.willCloseNotification, object: window, queue: .main
+        ) { [weak self] _ in
+            /* isVisible is still true inside willClose; re-evaluate (leave the Dock, hand
+               activation back) on the next runloop cycle. */
+            DispatchQueue.main.async {
+                self?.updateActivationPolicy()
+                self?.handBackActivationIfWindowless()
+            }
+        }
+    }
+
     /* Dock presence: the app normally stays invisible (accessory policy),
        but while the menu bar icon is hidden AND Settings is open there would
        be no sign the app is running — so it joins the Dock for the duration
@@ -235,19 +286,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func openSettings() {
         if settingsWindowController == nil {
             settingsWindowController = SettingsWindowController(updater: updater)
-            if let window = settingsWindowController?.window {
-                NotificationCenter.default.addObserver(
-                    forName: NSWindow.willCloseNotification, object: window, queue: .main
-                ) { [weak self] _ in
-                    /* isVisible is still true inside willClose; re-evaluate
-                       (and leave the Dock) on the next runloop cycle. */
-                    DispatchQueue.main.async { self?.updateActivationPolicy() }
-                }
-            }
+            observeClose(of: settingsWindowController?.window)
         }
         /* Accessory apps don't come forward on their own — activate first or
            the window opens behind the current app. */
-        NSApp.activate(ignoringOtherApps: true)
+        comeForward()
         settingsWindowController?.window?.makeKeyAndOrderFront(nil)
         updateActivationPolicy()
     }
