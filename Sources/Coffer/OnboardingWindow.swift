@@ -219,7 +219,13 @@ private final class OnboardingIllustrationView: NSView {
             NSBezierPath(roundedRect: row, xRadius: 6, yRadius: 6).fill()
         }
         let content = NSColor.black.withAlphaComponent(selected ? 0 : 0.35)
-        let textTint = selected ? NSColor.white : content
+        // Text on the accent: white on every accent but a light one (yellow),
+        // where the system itself switches to dark text. Judge by brightness.
+        let accent = NSColor.controlAccentColor.usingColorSpace(.sRGB)
+        let accentIsLight = accent.map {
+            0.2126 * $0.redComponent + 0.7152 * $0.greenComponent + 0.0722 * $0.blueComponent > 0.7
+        } ?? false
+        let textTint = selected ? (accentIsLight ? NSColor.black : NSColor.white) : content
 
         var x = row.minX + 8
         switch kind {
