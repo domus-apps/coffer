@@ -405,5 +405,49 @@
         sparkle:edSignature="3y/ca+a3S00ATvOLVBYh/YTNVQ7dZPSeQEBuT6sKk/nDuZh1QaHaQk8JWEV80W/OFQBQZ6haOXzykgtfp/MzAA==" length="2937418"
         type="application/octet-stream"/>
     </item>
+    <item>
+      <title>Coffer v1.3.3</title>
+      <link>https://github.com/domus-apps/coffer/releases/tag/v1.3.3</link>
+      <pubDate>Fri, 18 Sep 2026 04:05:07 +0000</pubDate>
+      <description xml:lang="en"><![CDATA[
+<h2>1.3.3</h2>
+<h3>Fixed</h3>
+<ul>
+<li>The Settings window could no longer be dragged after a switch in it was flipped.</li>
+</ul>
+<h2>1.3.2</h2>
+<h3>Fixed</h3>
+<ul>
+<li>The app icon's background looked flat in the Dock and Finder. It now shows its gradient.</li>
+</ul>
+<h2>1.3.1</h2>
+<h3>Fixed</h3>
+<ul>
+<li>Closing Settings or the welcome window now returns you to the app you were using, so other apps' shortcuts keep working right away.</li>
+</ul>      ]]></description>
+      <description xml:lang="ko"><![CDATA[
+<h2>1.3.3</h2>
+<h3>수정</h3>
+<ul>
+<li>설정 창의 스위치를 켜거나 끈 뒤 창을 끌어 옮길 수 없던 문제를 수정했습니다.</li>
+</ul>
+<h2>1.3.2</h2>
+<h3>수정</h3>
+<ul>
+<li>Dock과 Finder에서 앱 아이콘 배경이 평면으로 보이던 문제를 고쳤습니다.</li>
+</ul>
+<h2>1.3.1</h2>
+<h3>수정</h3>
+<ul>
+<li>설정 창이나 시작 안내 창을 닫으면 이전에 쓰던 앱으로 바로 돌아가, 다른 앱의 단축키가 곧바로 동작합니다.</li>
+</ul>      ]]></description>
+      <sparkle:version>15</sparkle:version>
+      <sparkle:shortVersionString>1.3.3</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+      <enclosure
+        url="https://github.com/domus-apps/coffer/releases/download/v1.3.3/Coffer.zip"
+        sparkle:edSignature="96eaUrWKcaiX19XTaOHeg/H+MVeVv98ZVObduVjA7Vljc5fAnVR1fliZXicKRaulFjnep8ccvR3f1QzXOgtEAA==" length="2938391"
+        type="application/octet-stream"/>
+    </item>
   </channel>
 </rss>
