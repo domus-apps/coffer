@@ -327,7 +327,11 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
         groupContent.addSubview(clearButton)
         buttonGroup.contentView = groupContent
         buttonGroup.cornerRadius = Self.buttonSize / 2
-        if #available(macOS 27.0, *) { buttonGroup.effectIsInteractive = true }
+        /* Press response (macOS 27+). Set by key: the release build uses
+           the macOS 26 SDK, which doesn't declare the property. */
+        if buttonGroup.responds(to: NSSelectorFromString("setEffectIsInteractive:")) {
+            buttonGroup.setValue(true, forKey: "effectIsInteractive")
+        }
         buttonGroup.translatesAutoresizingMaskIntoConstraints = false
         unpinButton.isHidden = true
         unpinButton.alphaValue = 0
