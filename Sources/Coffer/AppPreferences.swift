@@ -7,6 +7,26 @@ enum AppPreferences {
 
     private static let historyLimitKey = "pref.historyLimit"
     private static let hideMenuBarIconKey = "pref.hideMenuBarIcon"
+    private static let showsFilePathsKey = "pref.showsFilePaths"
+    private static let showsSourceIconsKey = "pref.showsSourceIcons"
+
+    /* The popup's two row extras, both on until turned off: a file row's
+       folder under its name, and the copying app's icon at the right. */
+    static var showsFilePaths: Bool {
+        get { UserDefaults.standard.object(forKey: showsFilePathsKey) as? Bool ?? true }
+        set {
+            UserDefaults.standard.set(newValue, forKey: showsFilePathsKey)
+            NotificationCenter.default.post(name: changed, object: nil)
+        }
+    }
+
+    static var showsSourceIcons: Bool {
+        get { UserDefaults.standard.object(forKey: showsSourceIconsKey) as? Bool ?? true }
+        set {
+            UserDefaults.standard.set(newValue, forKey: showsSourceIconsKey)
+            NotificationCenter.default.post(name: changed, object: nil)
+        }
+    }
 
     static var isMenuBarIconHidden: Bool {
         get { UserDefaults.standard.bool(forKey: hideMenuBarIconKey) }

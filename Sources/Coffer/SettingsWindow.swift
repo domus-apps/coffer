@@ -359,6 +359,23 @@ struct GeneralSettingsView: View {
                 }
             }
 
+            Section(L("Clipboard Popup")) {
+                Toggle(
+                    L("Show file paths"),
+                    isOn: model.binding(
+                        { AppPreferences.showsFilePaths }, { AppPreferences.showsFilePaths = $0 }))
+                VStack(alignment: .leading, spacing: 3) {
+                    Toggle(
+                        L("Show app icons"),
+                        isOn: model.binding(
+                            { AppPreferences.showsSourceIcons },
+                            { AppPreferences.showsSourceIcons = $0 }))
+                    Text(L("The app that was in front when each item was copied."))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             Section {
                 HistoryLimitRow(model: model)
             } header: {

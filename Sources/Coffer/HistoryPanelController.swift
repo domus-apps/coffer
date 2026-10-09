@@ -5,14 +5,14 @@ import QuickLookThumbnailing
 /* The ⌘⌥C palette: a floating, nonactivating panel listing the history
    newest-first under a sticky search field. Typing filters the list live,
    ↑/↓ move the selection, Return (or a double-click) copies it back to the
-   pasteboard, Escape clears the search — or, already empty, dismisses (as
-   does clicking elsewhere). A trash button beside the search field offers
+   pasteboard (⌥Return: a file row's path instead), Escape clears the search — or, already empty, dismisses (as does
+   clicking elsewhere). A row, or its preview, can be dragged out. A trash button beside the search field offers
    Clear History, confirmed inside the panel itself. Dragged by the strip
    above the search field, the panel is pinned there: it opens in that spot
    from then on, and a pin beside the trash unpins it, back to opening at
    the pointer. */
 final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableViewDelegate,
-    NSWindowDelegate, NSSearchFieldDelegate, NSMenuDelegate
+    NSWindowDelegate, NSSearchFieldDelegate, NSMenuDelegate, NSMenuItemValidation
 {
     private let store: ClipboardStore
     private let panel: KeyCapturePanel
@@ -26,10 +26,14 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
        while the question is up. */
     private let clearButton = NSButton()
     private let unpinButton = PinButton()
-    /* The search field ends at the reset button while it's shown, at the
-       trash otherwise. */
-    private var searchEndsAtClear: NSLayoutConstraint!
-    private var searchEndsAtPin: NSLayoutConstraint!
+    /* One glass capsule for both buttons: a circle around the trash, and
+       stretched leftward to take the pin in while the panel is pinned.
+       Interactive (macOS 27; on 26 it stays still), so pressing either
+       button swells and brightens the whole pill, as a toolbar group does.
+       Glass under each button instead pressed only that button's glass. */
+    private let buttonGroup = NSGlassEffectView()
+    private var buttonGroupWidth: NSLayoutConstraint!
+    private var isPinShown = false
     /* Set when the drag strip is grabbed; moves while it's set are the
        user's, and get remembered (see windowDidMove). */
     private var isUserDragging = false
@@ -41,10 +45,44 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
        unemphasized (gray-pill) style unless told otherwise — hence the row
        delegate below forcing the emphasized look. */
     private var filteredItems: [ClipboardItem] = []
+    /* The copying app of each filtered row (bundle ID, nil if unknown),
+       and its icon and name, looked up once per app. */
+    private var filteredSources: [String?] = []
+    private var sourceApps: [String: (icon: NSImage, name: String)?] = [:]
     /* Decoded previews are cached so scrolling never re-decodes: raster
        copies keyed by their PNG bytes, file thumbnails by URL. */
     private let imagePreviews = NSCache<NSData, NSImage>()
     private let fileThumbnails = NSCache<NSURL, NSImage>()
+    /* The larger look beside the card: hovering a thumbnail for
+       previewDelay opens it (see updateHover). */
+    private let preview = ThumbnailPreview()
+    private let filePreviews = NSCache<NSURL, NSImage>()
+    private var hoveredRow = -1
+    private var hoverTimer: Timer?
+    /* Just after a preview closes, the next thumbnail opens at once, as
+       tooltips stay warm: skimming down a column of images shouldn't
+       wait at every row. */
+    private var previewClosedAt = Date.distantPast
+    /* Opened from the row menu: kept wherever the pointer goes (it ends
+       up where the menu item was, often over another row) until Escape,
+       another thumbnail, a selection change, a scroll, or a new query. */
+    private var menuPreviewRow: Int?
+    /* Closed with Escape while the pointer rests on its thumbnail: not
+       reopened until the pointer moves off it. */
+    private var dismissedRow: Int?
+    /* Which open request a finished file render belongs to. */
+    private var previewGeneration = 0
+    /* The row the preview shows, and the grace after the pointer leaves
+       that row's thumbnail: time to reach the preview (to drag from it)
+       before it closes. */
+    private var previewRow = -1
+    private var leaveTimer: Timer?
+    private static let previewDelay: TimeInterval = 0.4
+    private static let previewWarmth: TimeInterval = 0.4
+    private static let previewLeaveGrace: TimeInterval = 0.35
+    private static let fileRowHeight: CGFloat = 40
+    private static let fileThumbnailSide: CGFloat = 28
+    private static let sourceIconSide: CGFloat = 16
 
     init(store: ClipboardStore) {
         self.store = store
@@ -65,6 +103,11 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
         NotificationCenter.default.addObserver(
             self, selector: #selector(storeChanged),
             name: ClipboardStore.changed, object: store)
+        /* The row extras (file paths, app icons) can change in Settings
+           while the panel is up. */
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(preferencesChanged),
+            name: AppPreferences.changed, object: nil)
     }
 
     func toggle() {
@@ -82,8 +125,9 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
         panel.backgroundColor = .clear
         /* No window-server shadow: it is snapshotted from content alpha at
            unpredictable times and kept showing up square behind the rounded
-           glass. The shadow is drawn in-window instead (see the shadow view
-           in configureContent), which is deterministic. */
+           glass, and its outline steps at the rounded corners even with a
+           delayed invalidateShadow. The shadow is drawn in-window instead
+           (see the shadow view in configureContent), which is deterministic. */
         panel.hasShadow = false
         /* Only the drag strip moves the panel (see DragHandleView): with
            the position remembered, a stray drag on the background would
@@ -95,7 +139,7 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
         /* Open on whatever Space (incl. full-screen apps) the user is on. */
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.delegate = self
-        panel.onCommit = { [weak self] in self?.commit() }
+        panel.onCommit = { [weak self] flags in self?.commit(with: flags) }
         panel.onCancel = { [weak self] in self?.cancel() }
         panel.onMoveSelection = { [weak self] delta in self?.moveSelection(by: delta) }
     }
@@ -116,24 +160,69 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
         tableView.delegate = self
         tableView.target = self
         tableView.doubleAction = #selector(rowDoubleClicked)
+        /* Rows drag out as what they hold (see ItemDrag); copy only, so a
+           drop into a Finder folder never moves the original file. */
+        tableView.setDraggingSourceOperationMask(.copy, forLocal: false)
 
         /* Right-click on a row: NSTableView pops this up and records the
            row in clickedRow. The delegate hookup guards against the panel's
            close-on-resign-key while the menu is up (see menuWillOpen). */
         let contextMenu = NSMenu()
         contextMenu.delegate = self
+        /* The Return shortcuts shown beside the two copies, for discovery;
+           the keys themselves are handled by the panel (see commit). */
         let copyItem = NSMenuItem(
-            title: L("Copy"), action: #selector(copyClickedRow), keyEquivalent: "")
+            title: L("Copy"), action: #selector(copyClickedRow), keyEquivalent: "\r")
+        copyItem.keyEquivalentModifierMask = []
         copyItem.target = self
         let deleteItem = NSMenuItem(
             title: L("Delete"), action: #selector(deleteClickedRow), keyEquivalent: "")
         deleteItem.target = self
+        let copyPathItem = NSMenuItem(
+            title: L("Copy Path"), action: #selector(copyPathClickedRow), keyEquivalent: "\r")
+        copyPathItem.keyEquivalentModifierMask = [.option]
+        copyPathItem.target = self
+        let previewItem = NSMenuItem(
+            title: L("Preview"), action: #selector(previewClickedRow), keyEquivalent: "")
+        previewItem.target = self
         contextMenu.addItem(copyItem)
+        contextMenu.addItem(copyPathItem)
+        contextMenu.addItem(previewItem)
         contextMenu.addItem(deleteItem)
         tableView.menu = contextMenu
 
+        /* Always active: the panel never makes Coffer the active app. */
+        tableView.addTrackingArea(
+            NSTrackingArea(
+                rect: .zero,
+                options: [.mouseMoved, .mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+                owner: self))
+
+        /* The preview lives in a window of its own, so the pointer's
+           arrival there (to drag the image out) comes from the popover. */
+        preview.onPointerInsideChange = { [weak self] inside in
+            guard let self else { return }
+            if inside {
+                self.leaveTimer?.invalidate()
+            } else if self.hoveredRow < 0 {
+                self.scheduleLeaveCheck()
+            }
+        }
+        preview.onDragEnded = { [weak self] operation in
+            guard let self else { return }
+            if operation.isEmpty {
+                self.scheduleLeaveCheck()
+            } else {
+                self.panel.close()
+            }
+        }
+
         scrollView.documentView = tableView
         scrollView.hasVerticalScroller = true
+        /* Rows slide under a still pointer when the list scrolls. */
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(listScrolled),
+            name: NSView.boundsDidChangeNotification, object: scrollView.contentView)
         scrollView.autohidesScrollers = true
         scrollView.drawsBackground = false
         scrollView.translatesAutoresizingMaskIntoConstraints = false
@@ -148,26 +237,29 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
         searchField.font = .systemFont(ofSize: 13)
         searchField.focusRingType = .none
         searchField.delegate = self
+        /* Large: the field's bezel is drawn at its intrinsic height
+           whatever its frame, 24pt at regular size, which left it shorter
+           than the 28pt button capsule beside it. */
+        searchField.controlSize = .large
         searchField.translatesAutoresizingMaskIntoConstraints = false
 
-        /* Clear History: a round glass button at the search field's right,
-           the field's height. Dimmed rather than removed when there's
-           nothing to clear, so the header never shifts. */
+        /* Clear History: the trash at the capsule's right end. Dimmed
+           rather than removed when there's nothing to clear, so the header
+           never shifts. */
         clearButton.image = NSImage(
             systemSymbolName: "trash", accessibilityDescription: L("Clear History"))?
             .withSymbolConfiguration(.init(pointSize: 13, weight: .medium))
         clearButton.imagePosition = .imageOnly
-        clearButton.bezelStyle = .glass
-        clearButton.borderShape = .circle
-        clearButton.controlSize = .large
+        clearButton.isBordered = false
+        clearButton.contentTintColor = .labelColor
         clearButton.toolTip = L("Clear History")
         clearButton.setAccessibilityLabel(L("Clear History"))
         clearButton.target = self
         clearButton.action = #selector(clearHistoryClicked)
         clearButton.translatesAutoresizingMaskIntoConstraints = false
 
-        /* Unpin: the same round glass button, left of the trash, shown only
-           while the panel is pinned to a dragged-to spot. The pin says why
+        /* Unpin: left of the trash in the same capsule, shown only while
+           the panel is pinned to a dragged-to spot. The pin says why
            it's there; under the pointer it turns into what a click does. */
         let pinSymbol = NSImage.SymbolConfiguration(pointSize: 13, weight: .medium)
         unpinButton.pinImage = NSImage(
@@ -177,9 +269,8 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
             systemSymbolName: "pin.slash.fill", accessibilityDescription: L("Unpin"))?
             .withSymbolConfiguration(pinSymbol)
         unpinButton.imagePosition = .imageOnly
-        unpinButton.bezelStyle = .glass
-        unpinButton.borderShape = .circle
-        unpinButton.controlSize = .large
+        unpinButton.isBordered = false
+        unpinButton.contentTintColor = .labelColor
         unpinButton.toolTip = L("Unpin")
         unpinButton.setAccessibilityLabel(L("Unpin"))
         unpinButton.target = self
@@ -231,8 +322,16 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
         content.addSubview(blurStrip)
         content.addSubview(searchField)
         content.addSubview(emptyLabel)
-        content.addSubview(clearButton)
-        content.addSubview(unpinButton)
+        let groupContent = NSView()
+        groupContent.addSubview(unpinButton)
+        groupContent.addSubview(clearButton)
+        buttonGroup.contentView = groupContent
+        buttonGroup.cornerRadius = Self.buttonSize / 2
+        if #available(macOS 27.0, *) { buttonGroup.effectIsInteractive = true }
+        buttonGroup.translatesAutoresizingMaskIntoConstraints = false
+        unpinButton.isHidden = true
+        unpinButton.alphaValue = 0
+        content.addSubview(buttonGroup)
         content.addSubview(confirmView)
 
         /* The glass sits inset in a transparent margin; a content-less layer
@@ -290,25 +389,26 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
 
         scrollView.stickyHeaderInset = Self.searchAreaHeight
         scrollView.headerFadeTop = Self.searchFieldBottom
-        searchEndsAtClear = searchField.trailingAnchor.constraint(
-            equalTo: clearButton.leadingAnchor, constant: -6)
-        searchEndsAtPin = searchField.trailingAnchor.constraint(
-            equalTo: unpinButton.leadingAnchor, constant: -6)
+        buttonGroupWidth = buttonGroup.widthAnchor.constraint(equalToConstant: Self.buttonSize)
         NSLayoutConstraint.activate([
             searchField.topAnchor.constraint(
                 equalTo: content.topAnchor, constant: Self.searchFieldTop),
             searchField.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 10),
-            searchEndsAtClear,
-            searchField.heightAnchor.constraint(equalToConstant: 28),
-            unpinButton.trailingAnchor.constraint(
-                equalTo: clearButton.leadingAnchor, constant: -6),
-            unpinButton.centerYAnchor.constraint(equalTo: searchField.centerYAnchor),
-            unpinButton.widthAnchor.constraint(equalToConstant: 28),
-            unpinButton.heightAnchor.constraint(equalToConstant: 28),
-            clearButton.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -10),
-            clearButton.centerYAnchor.constraint(equalTo: searchField.centerYAnchor),
-            clearButton.widthAnchor.constraint(equalToConstant: 28),
-            clearButton.heightAnchor.constraint(equalToConstant: 28),
+            searchField.trailingAnchor.constraint(
+                equalTo: buttonGroup.leadingAnchor, constant: -6),
+            searchField.heightAnchor.constraint(equalToConstant: Self.buttonSize),
+            buttonGroup.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -10),
+            buttonGroup.centerYAnchor.constraint(equalTo: searchField.centerYAnchor),
+            buttonGroup.heightAnchor.constraint(equalToConstant: Self.buttonSize),
+            buttonGroupWidth,
+            clearButton.trailingAnchor.constraint(equalTo: groupContent.trailingAnchor),
+            clearButton.centerYAnchor.constraint(equalTo: groupContent.centerYAnchor),
+            clearButton.widthAnchor.constraint(equalToConstant: Self.buttonSize),
+            clearButton.heightAnchor.constraint(equalToConstant: Self.buttonSize),
+            unpinButton.trailingAnchor.constraint(equalTo: clearButton.leadingAnchor),
+            unpinButton.centerYAnchor.constraint(equalTo: groupContent.centerYAnchor),
+            unpinButton.widthAnchor.constraint(equalToConstant: Self.buttonSize),
+            unpinButton.heightAnchor.constraint(equalToConstant: Self.buttonSize),
             blurStrip.topAnchor.constraint(equalTo: content.topAnchor),
             blurStrip.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             blurStrip.trailingAnchor.constraint(equalTo: content.trailingAnchor),
@@ -340,6 +440,8 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
     /* The padding above the search field, which doubles as the drag strip
        (less the top resize band). */
     private static let searchFieldTop: CGFloat = 10
+    /* The search field's height, and each button's square in the capsule. */
+    private static let buttonSize: CGFloat = 28
     /* The field's bottom edge (10pt top padding + 28pt field): where rows
        must be fully hidden, and where the dissolve ramp hangs from. */
     private static let searchFieldBottom: CGFloat = 38
@@ -430,6 +532,7 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
            handling while the frontmost app stays active underneath. Focus
            lands on the search field so typing filters immediately; the
            list is driven from the panel's key interception instead. */
+        panel.alphaValue = 1
         panel.makeKeyAndOrderFront(nil)
         panel.makeFirstResponder(searchField)
 
@@ -460,7 +563,11 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
        lands on `row` clamped into the new list — 0 (the newest match) for
        fresh opens and query changes, the previous row for store updates. */
     private func refilter(selectingRow row: Int = 0) {
-        filteredItems = ClipboardHistory.filtering(store.items, with: searchField.stringValue)
+        hidePreview()
+        let entries = ClipboardHistory.filtering(
+            store.entries, with: searchField.stringValue, item: \.item)
+        filteredItems = entries.map(\.item)
+        filteredSources = entries.map(\.source)
         tableView.reloadData()
         updateEmptyState()
         guard !filteredItems.isEmpty else { return }
@@ -507,19 +614,35 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
         scrollRowIntoView(row)
     }
 
-    /* Return answers the confirmation while it's up; otherwise it copies. */
-    private func commit() {
+    /* Return answers the confirmation while it's up; otherwise it copies
+       the selected item. ⌥ takes a file row's path instead of the files
+       (other rows have no path: a beep, and the panel stays). Coffer
+       never pastes for you: that would mean posting keystrokes, which
+       needs a permission Coffer otherwise has no use for. */
+    private func commit(with flags: NSEvent.ModifierFlags) {
         if isConfirmingClear {
             performClear()
+            return
+        }
+        let row = tableView.selectedRow
+        guard row >= 0, row < filteredItems.count else { return }
+        if flags.contains(.option) {
+            guard case .files(let urls) = filteredItems[row] else {
+                NSSound.beep()
+                return
+            }
+            copyPaths(of: urls)
         } else {
-            copySelection()
+            copyItem(at: row)
         }
     }
 
-    /* Escape backs out one level at a time: the confirmation, then the
-       query, then the panel. */
+    /* Escape backs out one level at a time: the preview, the
+       confirmation, then the query, then the panel. */
     private func cancel() {
-        if isConfirmingClear {
+        if preview.isVisible {
+            dismissPreview()
+        } else if isConfirmingClear {
             endClearConfirmation()
         } else if searchField.stringValue.isEmpty {
             panel.close()
@@ -561,6 +684,9 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
             NSPoint(x: origin.x - Self.shadowMargin, y: origin.y - Self.shadowMargin))
     }
 
+    /* Where copies go: the pasteboard the watcher watches. */
+    private static var pasteboard: NSPasteboard { PasteboardWatcher.pasteboard }
+
     private func copySelection() {
         copyItem(at: tableView.selectedRow)
     }
@@ -569,7 +695,7 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
         guard row >= 0, row < filteredItems.count else { return }
         let item = filteredItems[row]
         panel.close()
-        let pasteboard = NSPasteboard.general
+        let pasteboard = Self.pasteboard
         pasteboard.clearContents()
         switch item {
         case .text(let string):
@@ -579,6 +705,7 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
         case .files(let urls):
             pasteboard.writeObjects(urls as [NSURL])
         }
+        pasteboard.setData(Data(), forType: PasteboardWatcher.fromCoffer)
         /* The watcher sees this write and promotes the item to the front —
            exactly the re-copy behavior the history model already defines. */
     }
@@ -587,6 +714,48 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
 
     @objc private func copyClickedRow() {
         copyItem(at: tableView.clickedRow)
+    }
+
+    /* The files' paths as text, one per line, as Finder's Copy as
+       Pathname writes them. */
+    private func copyPaths(of urls: [URL]) {
+        panel.close()
+        let pasteboard = Self.pasteboard
+        pasteboard.clearContents()
+        pasteboard.setString(
+            urls.map(\.absoluteURL.path).joined(separator: "\n"), forType: .string)
+        pasteboard.setData(Data(), forType: PasteboardWatcher.fromCoffer)
+    }
+
+    @objc private func copyPathClickedRow() {
+        let row = tableView.clickedRow
+        guard row >= 0, row < filteredItems.count, case .files(let urls) = filteredItems[row]
+        else { return }
+        copyPaths(of: urls)
+    }
+
+    @objc private func previewClickedRow() {
+        let row = tableView.clickedRow
+        guard row >= 0, row < filteredItems.count else { return }
+        hoverTimer?.invalidate()
+        menuPreviewRow = row
+        hoveredRow = row
+        showPreview(forRow: row)
+    }
+
+    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        let row = tableView.clickedRow
+        let item = row >= 0 && row < filteredItems.count ? filteredItems[row] : nil
+        switch menuItem.action {
+        case #selector(previewClickedRow):
+            if case .text = item { return false }
+            return item != nil
+        case #selector(copyPathClickedRow):
+            if case .files = item { return true }
+            return false
+        default:
+            return true
+        }
     }
 
     /* Deleting keeps the panel open: storeChanged re-filters and moves the
@@ -618,12 +787,11 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
     private func beginClearConfirmation() {
         guard !isConfirmingClear, !store.items.isEmpty else { return }
         isConfirmingClear = true
+        hidePreview()
         panel.makeFirstResponder(nil)
         panel.capturesAllKeys = true
         updateConfirmLabel()
-        for view in [scrollView, blurStrip, searchField, clearButton, unpinButton]
-            as [NSView]
-        {
+        for view in [scrollView, blurStrip, searchField, buttonGroup] as [NSView] {
             view.isHidden = true
         }
         updateEmptyState()
@@ -634,7 +802,7 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
         guard isConfirmingClear else { return }
         isConfirmingClear = false
         confirmView.isHidden = true
-        for view in [scrollView, blurStrip, searchField, clearButton] as [NSView] {
+        for view in [scrollView, blurStrip, searchField, buttonGroup] as [NSView] {
             view.isHidden = false
         }
         updatePinButton()
@@ -681,12 +849,35 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
         panel.makeFirstResponder(searchField)
     }
 
+    /* The capsule stretches to take the pin in and shrinks back around
+       the trash, the search field giving way alongside. Animated only
+       while the panel is on screen: pinning happens mid-drag, unpinning on
+       the pin's own click. */
     private func updatePinButton() {
         let pinned = savedGlassTopLeft != nil
-        unpinButton.isHidden = !pinned || isConfirmingClear
-        /* Deactivate first: both active at once is a conflict. */
-        (pinned ? searchEndsAtClear : searchEndsAtPin).isActive = false
-        (pinned ? searchEndsAtPin : searchEndsAtClear).isActive = true
+        guard pinned != isPinShown else { return }
+        isPinShown = pinned
+        if pinned { unpinButton.isHidden = false }
+        let width = Self.buttonSize * (pinned ? 2 : 1)
+        guard panel.isVisible else {
+            buttonGroupWidth.constant = width
+            unpinButton.alphaValue = pinned ? 1 : 0
+            unpinButton.isHidden = !pinned
+            return
+        }
+        /* The constraint itself is animated, not the frames: that lays the
+           header out on every frame, and the glass reshapes only on real
+           layout (an implicit frame animation snapped it to the end shape
+           while the buttons drifted on their own). */
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.3
+            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            buttonGroupWidth.animator().constant = width
+            unpinButton.animator().alphaValue = pinned ? 1 : 0
+        } completionHandler: { [weak self] in
+            guard let self, !self.isPinShown else { return }
+            self.unpinButton.isHidden = true
+        }
     }
 
     /* The placeholder and the trash button both follow the store: nothing
@@ -701,7 +892,12 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
         copySelection()
     }
 
-    @objc private func storeChanged() {
+    @objc private func preferencesChanged() {
+        guard panel.isVisible else { return }
+        refilter(selectingRow: tableView.selectedRow)
+    }
+
+        @objc private func storeChanged() {
         guard panel.isVisible else { return }
         refilter(selectingRow: tableView.selectedRow)
         /* A copy can land mid-confirmation: keep the count honest, and
@@ -721,6 +917,53 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
         filteredItems.count
     }
 
+    /* A click on another row (or ↑/↓) moves on from a preview the row
+       menu opened. */
+    func tableViewSelectionDidChange(_ notification: Notification) {
+        if menuPreviewRow != nil { hidePreview() }
+    }
+
+    /* File rows carry a second line, their folder, unless that's off in
+       Settings. */
+    func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
+        guard AppPreferences.showsFilePaths, row < filteredItems.count,
+            case .files = filteredItems[row]
+        else {
+            return tableView.rowHeight
+        }
+        return Self.fileRowHeight
+    }
+
+    /* The first of the row's drag writers; the drag's start adds the rest
+       (every file of a multi-file copy: a pasteboard item holds one). */
+    func tableView(_ tableView: NSTableView, pasteboardWriterForRow row: Int)
+        -> NSPasteboardWriting?
+    {
+        guard !isConfirmingClear, row < filteredItems.count else { return nil }
+        return ItemDrag.writers(for: filteredItems[row]).first
+    }
+
+    func tableView(
+        _ tableView: NSTableView, draggingSession session: NSDraggingSession,
+        willBeginAt screenPoint: NSPoint, forRowIndexes rowIndexes: IndexSet
+    ) {
+        hidePreview()
+        /* The table asks for one writer per row and never hands its drag
+           to an overridable beginDraggingSession (measured), so the other
+           files join the drag pasteboard as extra items here. */
+        guard let row = rowIndexes.first, row < filteredItems.count else { return }
+        let rest = ItemDrag.writers(for: filteredItems[row]).dropFirst()
+        if !rest.isEmpty { session.draggingPasteboard.writeObjects(Array(rest)) }
+    }
+
+    /* A drop that took the item uses it, as a copy does: the panel goes. */
+    func tableView(
+        _ tableView: NSTableView, draggingSession session: NSDraggingSession,
+        endedAt screenPoint: NSPoint, operation: NSDragOperation
+    ) {
+        if !operation.isEmpty { panel.close() }
+    }
+
     /* Key focus lives on the search field, so the table would render its
        selection in the inactive gray style; force the emphasized (accent
        color) look the palette should always have. */
@@ -731,6 +974,17 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int)
         -> NSView?
     {
+        let cell = itemCell(in: tableView, row: row)
+        /* No icon to show gives its width back to the text. */
+        let app = AppPreferences.showsSourceIcons ? sourceApp(for: filteredSources[row]) : nil
+        cell.sourceIconView?.image = app?.icon
+        cell.sourceIconView?.toolTip = app?.name
+        cell.sourceIconView?.isHidden = app == nil
+        cell.sourceIconWidth?.constant = app == nil ? 0 : Self.sourceIconSide
+        return cell
+    }
+
+    private func itemCell(in tableView: NSTableView, row: Int) -> HistoryCellView {
         switch filteredItems[row] {
         case .text(let text):
             let cell = textCell(in: tableView)
@@ -744,9 +998,11 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
             cell.textField?.stringValue = Self.imageLabel(for: preview)
             return cell
         case .files(let urls):
-            let cell = mediaCell(in: tableView)
+            let showsPath = AppPreferences.showsFilePaths
+            let cell = showsPath ? fileCell(in: tableView) : mediaCell(in: tableView)
             cell.representedItem = filteredItems[row]
             cell.textField?.stringValue = Self.filesLabel(for: urls)
+            cell.detailField?.stringValue = Self.folderLabel(for: urls)
             if let url = urls.first {
                 loadFileThumbnail(for: url, into: cell)
             }
@@ -759,14 +1015,14 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
        it would sit visibly high inside the selection pill. The container
        centers the label vertically and pads it horizontally clear of the
        pill's rounded ends. */
-    private func textCell(in tableView: NSTableView) -> NSTableCellView {
+    private func textCell(in tableView: NSTableView) -> HistoryCellView {
         let identifier = NSUserInterfaceItemIdentifier("TextCell")
         if let reused = tableView.makeView(withIdentifier: identifier, owner: nil)
-            as? NSTableCellView
+            as? HistoryCellView
         {
             return reused
         }
-        let cell = NSTableCellView()
+        let cell = HistoryCellView()
         cell.identifier = identifier
         let label = NSTextField(labelWithString: "")
         label.lineBreakMode = .byTruncatingTail
@@ -774,25 +1030,26 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
         label.translatesAutoresizingMaskIntoConstraints = false
         cell.addSubview(label)
         cell.textField = label
+        let icon = addSourceIcon(to: cell)
         NSLayoutConstraint.activate([
             label.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 8),
             label.trailingAnchor.constraint(
-                lessThanOrEqualTo: cell.trailingAnchor, constant: -8),
+                lessThanOrEqualTo: icon.leadingAnchor, constant: -6),
             label.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
         ])
         return cell
     }
 
     /* Image and file rows: a rounded thumbnail ahead of the label. */
-    private func mediaCell(in tableView: NSTableView) -> MediaCellView {
+    private func mediaCell(in tableView: NSTableView) -> HistoryCellView {
         let identifier = NSUserInterfaceItemIdentifier("MediaCell")
         if let reused = tableView.makeView(withIdentifier: identifier, owner: nil)
-            as? MediaCellView
+            as? HistoryCellView
         {
             reused.imageView?.image = nil
             return reused
         }
-        let cell = MediaCellView()
+        let cell = HistoryCellView()
         cell.identifier = identifier
         let thumbnail = NSImageView()
         thumbnail.imageScaling = .scaleProportionallyDown
@@ -808,6 +1065,7 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
         cell.addSubview(label)
         cell.imageView = thumbnail
         cell.textField = label
+        let icon = addSourceIcon(to: cell)
         NSLayoutConstraint.activate([
             thumbnail.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 8),
             thumbnail.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
@@ -815,10 +1073,108 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
             thumbnail.heightAnchor.constraint(equalToConstant: 22),
             label.leadingAnchor.constraint(equalTo: thumbnail.trailingAnchor, constant: 7),
             label.trailingAnchor.constraint(
-                lessThanOrEqualTo: cell.trailingAnchor, constant: -8),
+                lessThanOrEqualTo: icon.leadingAnchor, constant: -6),
             label.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
         ])
         return cell
+    }
+
+    /* File rows: a larger thumbnail beside two lines, the name and, in
+       small secondary text, the folder it's in. */
+    private func fileCell(in tableView: NSTableView) -> HistoryCellView {
+        let identifier = NSUserInterfaceItemIdentifier("FileCell")
+        if let reused = tableView.makeView(withIdentifier: identifier, owner: nil)
+            as? HistoryCellView
+        {
+            reused.imageView?.image = nil
+            return reused
+        }
+        let cell = HistoryCellView()
+        cell.identifier = identifier
+        let thumbnail = NSImageView()
+        thumbnail.imageScaling = .scaleProportionallyDown
+        thumbnail.wantsLayer = true
+        thumbnail.layer?.cornerRadius = 4
+        thumbnail.layer?.masksToBounds = true
+        thumbnail.translatesAutoresizingMaskIntoConstraints = false
+        let label = NSTextField(labelWithString: "")
+        label.lineBreakMode = .byTruncatingTail
+        label.font = .systemFont(ofSize: 13)
+        label.translatesAutoresizingMaskIntoConstraints = false
+        /* Middle truncation keeps both ends of a long path: where it
+           starts and the folder itself. */
+        let detail = NSTextField(labelWithString: "")
+        detail.lineBreakMode = .byTruncatingMiddle
+        detail.font = .systemFont(ofSize: 11)
+        detail.textColor = .secondaryLabelColor
+        detail.translatesAutoresizingMaskIntoConstraints = false
+        cell.addSubview(thumbnail)
+        cell.addSubview(label)
+        cell.addSubview(detail)
+        cell.imageView = thumbnail
+        cell.textField = label
+        cell.detailField = detail
+        let icon = addSourceIcon(to: cell)
+        let side = Self.fileThumbnailSide
+        NSLayoutConstraint.activate([
+            thumbnail.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 5),
+            thumbnail.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+            thumbnail.widthAnchor.constraint(equalToConstant: side),
+            thumbnail.heightAnchor.constraint(equalToConstant: side),
+            label.leadingAnchor.constraint(equalTo: thumbnail.trailingAnchor, constant: 7),
+            label.trailingAnchor.constraint(
+                lessThanOrEqualTo: icon.leadingAnchor, constant: -6),
+            label.bottomAnchor.constraint(equalTo: cell.centerYAnchor, constant: 1),
+            detail.leadingAnchor.constraint(equalTo: label.leadingAnchor),
+            detail.trailingAnchor.constraint(
+                lessThanOrEqualTo: icon.leadingAnchor, constant: -6),
+            detail.topAnchor.constraint(equalTo: cell.centerYAnchor, constant: 1),
+        ])
+        return cell
+    }
+
+    /* The copying app's icon at the row's right end (named in its
+       tooltip); hidden when the app isn't known. */
+    private func addSourceIcon(to cell: HistoryCellView) -> NSImageView {
+        let icon = NSImageView()
+        icon.imageScaling = .scaleProportionallyUpOrDown
+        icon.translatesAutoresizingMaskIntoConstraints = false
+        cell.addSubview(icon)
+        cell.sourceIconView = icon
+        let width = icon.widthAnchor.constraint(equalToConstant: Self.sourceIconSide)
+        cell.sourceIconWidth = width
+        NSLayoutConstraint.activate([
+            icon.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -8),
+            icon.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+            width,
+            icon.heightAnchor.constraint(equalToConstant: Self.sourceIconSide),
+        ])
+        return icon
+    }
+
+    /* An app that's no longer installed has no icon to show: no badge,
+       rather than a generic one. */
+    private func sourceApp(for bundleID: String?) -> (icon: NSImage, name: String)? {
+        guard let bundleID else { return nil }
+        if let known = sourceApps[bundleID] { return known }
+        var app: (icon: NSImage, name: String)?
+        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
+            let name = FileManager.default.displayName(atPath: url.path)
+            app = (
+                NSWorkspace.shared.icon(forFile: url.path),
+                (name as NSString).deletingPathExtension
+            )
+        }
+        sourceApps[bundleID] = app
+        return app
+    }
+
+    /* The folder of a file copy, home abbreviated to ~; for files from
+       several folders, the first one's. */
+    private static func folderLabel(for urls: [URL]) -> String {
+        guard let first = urls.first else { return "" }
+        let folder = first.absoluteURL.deletingLastPathComponent().path
+        return (folder as NSString).abbreviatingWithTildeInPath
     }
 
     private func imagePreview(for data: Data) -> NSImage? {
@@ -845,7 +1201,7 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
     /* The Finder icon shows instantly; QuickLook's real preview (an image's
        pixels, a video's poster frame, a PDF's first page) replaces it when
        it arrives — unless the cell was reused for another item meanwhile. */
-    private func loadFileThumbnail(for url: URL, into cell: MediaCellView) {
+    private func loadFileThumbnail(for url: URL, into cell: HistoryCellView) {
         if let cached = fileThumbnails.object(forKey: url as NSURL) {
             cell.imageView?.image = cached
             return
@@ -853,7 +1209,7 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
         cell.imageView?.image = NSWorkspace.shared.icon(forFile: url.path)
         let expected = cell.representedItem
         let request = QLThumbnailGenerator.Request(
-            fileAt: url, size: CGSize(width: 22, height: 22),
+            fileAt: url, size: CGSize(width: Self.fileThumbnailSide, height: Self.fileThumbnailSide),
             scale: panel.backingScaleFactor, representationTypes: .thumbnail)
         QLThumbnailGenerator.shared.generateBestRepresentation(for: request) {
             [weak self, weak cell] representation, _ in
@@ -867,7 +1223,188 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
         }
     }
 
+    // MARK: - Thumbnail preview
+
+    /* Named for Objective-C by hand: the tracking area sends mouseMoved:,
+       and a non-responder's Swift method would export as
+       mouseMovedWithEvent: and never hear from it. */
+    @objc(mouseMoved:) func mouseMoved(with event: NSEvent) {
+        updateHover(at: event.locationInWindow)
+    }
+
+    @objc(mouseExited:) func mouseExited(with event: NSEvent) {
+        updateHover(at: nil)
+    }
+
+    /* The previewed row slides away from its preview (and from the
+       pointer), so a scroll closes it; the next move re-evaluates. */
+    @objc private func listScrolled() {
+        hidePreview()
+    }
+
+    /* Tracks which row's thumbnail is under the pointer. Resting on one
+       opens its preview after previewDelay (at once while warm); moving to
+       another switches it, and leaving every thumbnail closes it. */
+    private func updateHover(at windowPoint: NSPoint?) {
+        let point = windowPoint.map { tableView.convert($0, from: nil) }
+        let row = point.map(thumbnailRow(at:)) ?? -1
+        if let sticky = menuPreviewRow {
+            if row < 0 || row == sticky { return }
+            menuPreviewRow = nil
+        }
+        if let dismissed = dismissedRow {
+            if row == dismissed { return }
+            dismissedRow = nil
+        }
+        guard row != hoveredRow else { return }
+        hoverTimer?.invalidate()
+        guard row >= 0 else {
+            hoveredRow = -1
+            if preview.isVisible {
+                scheduleLeaveCheck()
+            } else {
+                hidePreview()
+            }
+            return
+        }
+        leaveTimer?.invalidate()
+        hoveredRow = row
+        if preview.isVisible || Date().timeIntervalSince(previewClosedAt) < Self.previewWarmth {
+            showPreview(forRow: row)
+        } else {
+            hoverTimer = Timer.scheduledTimer(
+                withTimeInterval: Self.previewDelay, repeats: false
+            ) { [weak self] _ in
+                guard let self, self.hoveredRow == row else { return }
+                self.showPreview(forRow: row)
+            }
+        }
+    }
+
+    /* After the pointer leaves the previewed thumbnail: the preview stays
+       while the pointer is in it (or dragging from it), or still on the
+       previewed row (on its way across the card to a preview on the right
+       side); anywhere else, it closes. */
+    private func scheduleLeaveCheck() {
+        leaveTimer?.invalidate()
+        leaveTimer = Timer.scheduledTimer(
+            withTimeInterval: Self.previewLeaveGrace, repeats: false
+        ) { [weak self] _ in
+            self?.checkPreviewLeave()
+        }
+    }
+
+    private func checkPreviewLeave() {
+        guard preview.isVisible, hoveredRow < 0, menuPreviewRow == nil else { return }
+        /* The popover reports the pointer leaving it, which checks again. */
+        if preview.isPointerInside || preview.isDragging { return }
+        let point = tableView.convert(panel.mouseLocationOutsideOfEventStream, from: nil)
+        if previewRow >= 0, tableView.row(at: point) == previewRow {
+            scheduleLeaveCheck()
+            return
+        }
+        hidePreview()
+    }
+
+    /* The row whose thumbnail (a little generously) contains the point,
+       or -1: text rows have none. */
+    private func thumbnailRow(at point: NSPoint) -> Int {
+        let row = tableView.row(at: point)
+        guard row >= 0, row < filteredItems.count, !isConfirmingClear,
+            let cell = tableView.view(atColumn: 0, row: row, makeIfNecessary: false)
+                as? HistoryCellView,
+            let thumbnail = cell.imageView
+        else { return -1 }
+        let rect = thumbnail.convert(thumbnail.bounds, to: tableView).insetBy(dx: -3, dy: -3)
+        return rect.contains(point) ? row : -1
+    }
+
+    private func showPreview(forRow row: Int) {
+        guard row < filteredItems.count, panel.isVisible, let root = panel.contentView
+        else { return }
+        previewGeneration += 1
+        let generation = previewGeneration
+        /* The arrow lands on the row's height at the card's edge, where
+           the popover leaves the card. */
+        let card = root.bounds.insetBy(dx: Self.shadowMargin, dy: Self.shadowMargin)
+        let rowRect = tableView.convert(tableView.rect(ofRow: row), to: root)
+        let item = filteredItems[row]
+        let present = { [weak self] (image: NSImage) in
+            guard let self, generation == self.previewGeneration, self.hoveredRow == row
+            else { return }
+            self.previewRow = row
+            self.preview.show(
+                image, beside: card, rowRect: rowRect, of: root,
+                makeWriters: { ItemDrag.writers(for: item) })
+        }
+        switch item {
+        case .text:
+            return
+        case .image(let data):
+            if let image = imagePreview(for: data) { present(image) }
+        case .files(let urls):
+            guard let url = urls.first else { return }
+            if let cached = filePreviews.object(forKey: url as NSURL) {
+                present(cached)
+                return
+            }
+            /* QuickLook's rendering at the preview's size: an image's
+               pixels, a video's poster frame, a PDF's first page, or the
+               Finder icon for anything without one. */
+            let side = 280.0
+            let request = QLThumbnailGenerator.Request(
+                fileAt: url, size: CGSize(width: side, height: side),
+                scale: panel.backingScaleFactor, representationTypes: .all)
+            QLThumbnailGenerator.shared.generateBestRepresentation(for: request) {
+                [weak self] representation, _ in
+                guard let representation else { return }
+                DispatchQueue.main.async {
+                    let image = representation.nsImage
+                    self?.filePreviews.setObject(image, forKey: url as NSURL)
+                    present(image)
+                }
+            }
+        }
+    }
+
+    /* Escape's close: the pointer is still resting on the thumbnail, so
+       that row stays quiet until the pointer leaves it, and the warmth is
+       spent so the next thumbnail waits out the delay again. */
+    private func dismissPreview() {
+        let row = menuPreviewRow ?? (hoveredRow >= 0 ? hoveredRow : previewRow)
+        hidePreview()
+        dismissedRow = row
+        previewClosedAt = .distantPast
+    }
+
+    /* Also forgets the hovered row, so after a reload or scroll the
+       pointer's next move counts as arriving on whatever is under it. */
+    private func hidePreview() {
+        hoverTimer?.invalidate()
+        leaveTimer?.invalidate()
+        hoveredRow = -1
+        previewRow = -1
+        menuPreviewRow = nil
+        dismissedRow = nil
+        previewGeneration += 1
+        guard preview.isVisible else { return }
+        preview.hide()
+        previewClosedAt = Date()
+    }
+
     // MARK: - NSWindowDelegate
+
+    func windowWillClose(_ notification: Notification) {
+        hidePreview()
+        preview.hideNow()
+        /* Closed while the preview popover is still fading out (a second
+           Escape right after the first), the window server keeps the panel
+           on screen, inactive, until the fade ends (~0.2 s more, measured
+           2026-10-09; ordering out first doesn't help). An alpha change
+           goes through at once, so the panel vanishes when asked; show()
+           restores it. */
+        panel.alphaValue = 0
+    }
 
     /* Moves after the strip is grabbed are the user's: remember each one.
        performDrag returns at once and the window server reports the drag
@@ -1460,38 +1997,32 @@ private final class FadingScrollView: NSScrollView {
     }
 }
 
-/* The edge treatment system context menus get: a faint dark outline plus a
-   bright inner rim, which reads against light and dark backdrops alike.
+/* The rim NSPopover draws (measured against the thumbnail preview's): one
+   0.5pt bright line just inside the edge. The dark outer line comes from
+   the glass itself, so no outline is added here; a second, darker ring
+   read heavier than any system popover. The window-server shadow, which
+   would give the native outer edge, is off (see the panel setup): its
+   snapshot of the rounded glass came out stepped at the corners.
    Colors re-resolve on appearance changes via updateLayer. */
 private final class HairlineBorderView: NSView {
-    private let outerRing = CALayer()
-    private let innerRing = CALayer()
+    private let ring = CALayer()
 
     init(frame: NSRect, cornerRadius: CGFloat) {
         super.init(frame: frame)
         wantsLayer = true
-
-        outerRing.frame = bounds
-        outerRing.cornerRadius = cornerRadius
-        outerRing.borderWidth = 0.5
-
-        innerRing.frame = bounds.insetBy(dx: 0.5, dy: 0.5)
-        innerRing.cornerRadius = cornerRadius - 0.5
-        innerRing.borderWidth = 1
-
-        for ring in [outerRing, innerRing] {
-            ring.cornerCurve = .continuous
-            layer?.addSublayer(ring)
-        }
+        ring.frame = bounds
+        ring.cornerRadius = cornerRadius
+        ring.cornerCurve = .continuous
+        ring.borderWidth = 0.5
+        layer?.addSublayer(ring)
     }
 
-    /* Keep the rings glued to the bounds through live resizes. */
+    /* Keep the ring glued to the bounds through live resizes. */
     override func layout() {
         super.layout()
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        outerRing.frame = bounds
-        innerRing.frame = bounds.insetBy(dx: 0.5, dy: 0.5)
+        ring.frame = bounds
         CATransaction.commit()
     }
 
@@ -1503,10 +2034,7 @@ private final class HairlineBorderView: NSView {
 
     override func updateLayer() {
         let isDark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-        outerRing.borderColor =
-            NSColor.black.withAlphaComponent(isDark ? 0.5 : 0.15).cgColor
-        innerRing.borderColor =
-            NSColor.white.withAlphaComponent(isDark ? 0.25 : 0.5).cgColor
+        ring.borderColor = NSColor.white.withAlphaComponent(isDark ? 0.12 : 0.22).cgColor
     }
 
     /* Purely decorative: never swallow clicks meant for the list. */
@@ -1518,7 +2046,7 @@ private final class HairlineBorderView: NSView {
    field's editor, which would otherwise consume all four (caret movement,
    completion, insertion) instead of driving the list. */
 private final class KeyCapturePanel: NSPanel {
-    var onCommit: (() -> Void)?
+    var onCommit: ((NSEvent.ModifierFlags) -> Void)?
     var onCancel: (() -> Void)?
     var onMoveSelection: ((Int) -> Void)?
     /* While a confirmation is up, plain typing is dropped instead of
@@ -1531,7 +2059,7 @@ private final class KeyCapturePanel: NSPanel {
         if event.type == .keyDown {
             switch Int(event.keyCode) {
             case kVK_Return, kVK_ANSI_KeypadEnter:
-                onCommit?()
+                onCommit?(event.modifierFlags)
                 return
             case kVK_Escape:
                 onCancel?()
@@ -1550,11 +2078,27 @@ private final class KeyCapturePanel: NSPanel {
     }
 }
 
-/* Cell for image and file rows; remembers what it currently shows so the
-   async QuickLook thumbnail can tell whether the cell was reused for a
+/* Cell for every row, with the copying app's icon at its right end.
+   Image and file rows remember what they currently show so the async
+   QuickLook thumbnail can tell whether the cell was reused for a
    different item while it rendered. */
-private final class MediaCellView: NSTableCellView {
+private final class HistoryCellView: NSTableCellView {
     var representedItem: ClipboardItem?
+    weak var sourceIconView: NSImageView?
+    /* Zero while there's no icon, so the text can run to the edge. */
+    var sourceIconWidth: NSLayoutConstraint?
+    /* The file row's folder line. The table hands the selection's style
+       to textField only, so this one follows it here. */
+    weak var detailField: NSTextField?
+
+    override var backgroundStyle: NSView.BackgroundStyle {
+        didSet {
+            detailField?.textColor =
+                backgroundStyle == .emphasized
+                ? NSColor.alternateSelectedControlTextColor.withAlphaComponent(0.75)
+                : .secondaryLabelColor
+        }
+    }
 }
 
 /* Selection pills stay in the accent color even though the table is never

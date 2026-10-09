@@ -41,8 +41,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         historyPanel = HistoryPanelController(store: store)
 
-        let watcher = PasteboardWatcher { [weak self] item in
-            self?.store.add(item)
+        let watcher = PasteboardWatcher { [weak self] item, source in
+            self?.store.add(item, source: source)
         }
         watcher.start()
         self.watcher = watcher
@@ -60,8 +60,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if ProcessInfo.processInfo.environment["COFFER_DEBUG_PANEL"] == "1" {
             /* Enough entries that the list scrolls, so the edge fades can
                be eyeballed too. */
+            /* Sources cycle through apps every Mac has (and one unknown),
+               so the row badges show too. */
+            let sampleSources = ["com.apple.Safari", "com.apple.Notes", "com.apple.TextEdit", nil]
             for index in stride(from: 30, through: 1, by: -1) {
-                store.add(.text("Sample clipboard item \(index)"))
+                store.add(
+                    .text("Sample clipboard item \(index)"),
+                    source: sampleSources[index % sampleSources.count])
             }
             /* One of each media kind exercises the thumbnail paths. */
             let sample = NSImage(size: NSSize(width: 120, height: 80), flipped: false) { rect in
@@ -75,11 +80,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 let png = NSBitmapImageRep(data: tiff)?
                     .representation(using: .png, properties: [:])
             {
-                store.add(.image(png))
+                store.add(.image(png), source: "com.apple.Preview")
             }
             let manifest = URL(fileURLWithPath: "Package.swift")
             if FileManager.default.fileExists(atPath: manifest.path) {
-                store.add(.files([manifest]))
+                store.add(.files([manifest]), source: "com.apple.finder")
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
                 self?.historyPanel?.toggle()

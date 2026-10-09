@@ -6,7 +6,16 @@ import Foundation
 final class ClipboardStore {
     static let changed = Notification.Name("Coffer.ClipboardStoreChanged")
 
-    private(set) var items: [ClipboardItem] = []
+    /* One history entry: what was copied, and the app it came from, the
+       frontmost one when the copy was seen (nil when unknown: copies kept
+       from before Coffer noted the app, or Coffer's own). */
+    struct Entry: Equatable, Codable {
+        var item: ClipboardItem
+        var source: String?
+    }
+
+    private(set) var entries: [Entry] = []
+    var items: [ClipboardItem] { entries.map(\.item) }
 
     /* nil (the test default) keeps the store fully in-memory. */
     private let persistence: HistoryPersistence?
@@ -15,9 +24,9 @@ final class ClipboardStore {
     private var limit: Int {
         didSet {
             guard limit != oldValue else { return }
-            let updated = ClipboardHistory.trimming(items, to: limit)
-            guard updated != items else { return }
-            items = updated
+            let updated = ClipboardHistory.trimming(entries, to: limit)
+            guard updated != entries else { return }
+            entries = updated
             didChange()
         }
     }
@@ -25,7 +34,7 @@ final class ClipboardStore {
     init(limit: Int = AppPreferences.historyLimit, persistence: HistoryPersistence? = nil) {
         self.limit = limit
         self.persistence = persistence
-        items = ClipboardHistory.trimming(persistence?.load() ?? [], to: limit)
+        entries = ClipboardHistory.trimming(persistence?.load() ?? [], to: limit)
         /* Follow the preference live, so lowering the cap in Settings trims
            the history right away instead of on the next copy. */
         NotificationCenter.default.addObserver(
@@ -35,25 +44,30 @@ final class ClipboardStore {
         }
     }
 
-    func add(_ item: ClipboardItem) {
-        let updated = ClipboardHistory.adding(item, to: items, limit: limit)
-        guard updated != items else { return }
-        items = updated
+    /// `source` is the copying app's bundle ID. An unknown source (nil)
+    /// keeps the one already noted for the item, so re-copying from
+    /// Coffer itself doesn't forget where it first came from.
+    func add(_ item: ClipboardItem, source: String? = nil) {
+        let known = source ?? entries.first { $0.item == item }?.source
+        let updated = ClipboardHistory.adding(
+            Entry(item: item, source: known), to: entries, limit: limit, by: \.item)
+        guard updated != entries else { return }
+        entries = updated
         didChange()
     }
 
     func remove(_ item: ClipboardItem) {
-        let updated = items.filter { $0 != item }
-        guard updated != items else { return }
-        items = updated
+        let updated = entries.filter { $0.item != item }
+        guard updated != entries else { return }
+        entries = updated
         didChange()
     }
 
     /// Wipes the whole history. A no-op on an empty store, so observers
     /// hear about real changes only, like `add` and `remove`.
     func clear() {
-        guard !items.isEmpty else { return }
-        items = []
+        guard !entries.isEmpty else { return }
+        entries = []
         didChange()
     }
 
@@ -62,7 +76,7 @@ final class ClipboardStore {
     func saveNow() {
         pendingSave?.cancel()
         pendingSave = nil
-        persistence?.save(items)
+        persistence?.save(entries)
     }
 
     private func didChange() {
@@ -75,7 +89,7 @@ final class ClipboardStore {
     private func scheduleSave() {
         guard let persistence else { return }
         pendingSave?.cancel()
-        let snapshot = items
+        let snapshot = entries
         let work = DispatchWorkItem { persistence.save(snapshot) }
         pendingSave = work
         DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 1, execute: work)

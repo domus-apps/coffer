@@ -4,6 +4,21 @@ All notable changes to Coffer are documented here. The release workflow publishe
 
 Keep each bullet on a single line: release notes render line breaks literally (both on GitHub and in the update dialog), so wrapped lines would break mid-sentence.
 
+## 2.0.0
+
+### Added
+
+- Hovering over a thumbnail shows a preview.
+- Supports drag and drop.
+- Shows which app each item was copied from.
+- Shows the path under the name of copied files.
+- File paths can be copied from the right-click menu or with ⌥Return.
+- File paths and app icons can be hidden in Settings.
+
+### Changed
+
+- The clipboard popup is closer to the macOS design.
+
 ## 1.4.0
 
 ### Added

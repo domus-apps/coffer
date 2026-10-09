@@ -44,9 +44,28 @@ import Testing
         .image(Data([0x89, 0x50, 0x4E, 0x47])),
         .files([URL(fileURLWithPath: "/tmp/Report.pdf")]),
     ]
+    let entries = items.map { ClipboardStore.Entry(item: $0, source: "com.apple.finder") }
     let persistence = HistoryPersistence(fileURL: url)
-    persistence.save(items)
-    #expect(persistence.load() == items)
+    persistence.save(entries)
+    #expect(persistence.load() == entries)
+}
+
+@Test func persistenceLoadsAHistoryFromBeforeSourcesWithoutThem() throws {
+    let url = FileManager.default.temporaryDirectory
+        .appendingPathComponent("coffer-legacy-\(UUID().uuidString).plist")
+    defer { try? FileManager.default.removeItem(at: url) }
+    let items: [ClipboardItem] = [.text("hello"), .files([URL(fileURLWithPath: "/tmp/a.txt")])]
+    try PropertyListEncoder().encode(items).write(to: url)
+    #expect(
+        HistoryPersistence(fileURL: url).load()
+            == items.map { ClipboardStore.Entry(item: $0, source: nil) })
+}
+
+@Test func addingByKeyReplacesTheOlderEntryWithTheSameKey() {
+    let history = ClipboardHistory.adding(
+        ("b", 2), to: [("a", 1), ("b", 1)], limit: 10, by: { $0.0 })
+    #expect(history.map(\.0) == ["b", "a"])
+    #expect(history.map(\.1) == [2, 1])
 }
 
 @Test func persistenceLoadsAnEmptyHistoryWhenNoFileExists() {

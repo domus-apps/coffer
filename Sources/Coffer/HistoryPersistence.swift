@@ -17,13 +17,19 @@ struct HistoryPersistence {
     }
 
     /// A missing or unreadable file (first launch, or a future format
-    /// change) is an empty history, never an error.
-    func load() -> [ClipboardItem] {
+    /// change) is an empty history, never an error. A file from before
+    /// entries noted their app (a bare item list) loads with no sources.
+    func load() -> [ClipboardStore.Entry] {
         guard let data = try? Data(contentsOf: fileURL) else { return [] }
-        return (try? PropertyListDecoder().decode([ClipboardItem].self, from: data)) ?? []
+        let decoder = PropertyListDecoder()
+        if let entries = try? decoder.decode([ClipboardStore.Entry].self, from: data) {
+            return entries
+        }
+        let items = (try? decoder.decode([ClipboardItem].self, from: data)) ?? []
+        return items.map { ClipboardStore.Entry(item: $0, source: nil) }
     }
 
-    func save(_ items: [ClipboardItem]) {
+    func save(_ items: [ClipboardStore.Entry]) {
         do {
             try FileManager.default.createDirectory(
                 at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
