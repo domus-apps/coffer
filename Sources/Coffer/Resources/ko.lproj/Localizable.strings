@@ -1,0 +1,44 @@
+/* Coffer 한국어 — 영어 원문이 키입니다 (Localization.swift 참고) */
+
+/* 메뉴 */
+"Clipboard History" = "클립보드 기록";
+"Settings…" = "설정…";
+"Check for Updates…" = "업데이트 확인…";
+"Quit Coffer" = "Coffer 종료";
+"Window" = "윈도우";
+"Close Window" = "윈도우 닫기";
+"Minimize" = "축소";
+
+/* 기록 팝업 */
+"Search" = "검색";
+"Clear History" = "기록 지우기";
+"Unpin" = "고정 해제";
+"Copy" = "복사";
+"Delete" = "삭제";
+"Cancel" = "취소";
+"Clear" = "지우기";
+"Clear the only item?" = "항목 하나를 지울까요?";
+"Clear all %d items?" = "항목 %d개를 모두 지울까요?";
+"Nothing copied yet" = "아직 복사한 항목이 없습니다";
+"No Results" = "결과 없음";
+"Image" = "이미지";
+"Files" = "파일";
+
+/* 환영 화면 */
+"Welcome to Coffer" = "Coffer에 오신 것을 환영합니다";
+"Coffer remembers everything you copy — text, images, and files — in a searchable history. Nothing you copy is lost to the next ⌘C again, and password manager entries are never recorded." = "Coffer는 텍스트, 이미지, 파일 등 복사한 모든 것을 검색할 수 있는 기록으로 남깁니다. 다음 ⌘C에 덮여 사라지는 일이 없고, 암호 관리자의 항목은 기록하지 않습니다.";
+"Press %@ to open your clipboard history" = "%@ 키를 눌러 클립보드 기록을 엽니다";
+"Start Using Coffer" = "Coffer 시작하기";
+
+/* 설정 */
+"General" = "일반";
+"Launch at login" = "로그인 시 실행";
+"Available in the bundled app only (Scripts/bundle.sh)." = "번들 앱에서만 사용할 수 있습니다 (Scripts/bundle.sh).";
+"Hide menu bar icon" = "메뉴 막대 아이콘 숨기기";
+"⌥⌘C still opens the history. While hidden, launch Coffer again to open Settings. The app appears in the Dock only while this window is open." = "숨긴 동안에도 ⌥⌘C로 기록을 열 수 있고, Coffer를 다시 실행하면 설정이 열립니다. 이 창이 열려 있는 동안에만 앱이 Dock에 나타납니다.";
+"History" = "기록";
+"Keep clipboard items" = "보관할 클립보드 항목 수";
+"Reset to Default" = "기본값으로 재설정";
+"Between %1$d and %2$d. The history lives in memory, images in full, so a higher cap uses more RAM. Lowering it removes the oldest items immediately." = "%1$d개에서 %2$d개까지 지정할 수 있습니다. 기록은 이미지까지 원본 그대로 메모리에 보관하므로 개수를 늘릴수록 메모리를 더 씁니다. 줄이면 가장 오래된 항목부터 바로 지워집니다.";
+"Updates" = "업데이트";
+"Version" = "버전";

@@ -10,7 +10,7 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
     private let onComplete: () -> Void
 
     private lazy var startButton = NSButton(
-        title: "Start Using Coffer", target: self, action: #selector(start))
+        title: L("Start Using Coffer"), target: self, action: #selector(start))
 
     init(onComplete: @escaping () -> Void) {
         self.onComplete = onComplete
@@ -42,14 +42,15 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
     // MARK: - Content
 
     private func makeContent() -> NSView {
-        let title = NSTextField(labelWithString: "Welcome to Coffer")
+        let title = NSTextField(labelWithString: L("Welcome to Coffer"))
         title.font = .systemFont(ofSize: 30, weight: .bold)
 
         let intro = NSTextField(
             wrappingLabelWithString:
-                "Coffer remembers everything you copy — text, images, and files — "
-                + "in a searchable history. Nothing you copy is lost to the next "
-                + "⌘C again, and password manager entries are never recorded.")
+                L(
+                    "Coffer remembers everything you copy — text, images, and files — "
+                        + "in a searchable history. Nothing you copy is lost to the next "
+                        + "⌘C again, and password manager entries are never recorded."))
         intro.font = .systemFont(ofSize: 14)
         intro.textColor = .secondaryLabelColor
         intro.alignment = .center
@@ -62,12 +63,21 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
             illustration.heightAnchor.constraint(equalToConstant: 190),
         ])
 
-        let shortcutRow = NSStackView(
-            views: [
-                labelView("Press"),
-                keycap("⌘"), keycap("⌥"), keycap("C"),
-                labelView("to open your clipboard history"),
-            ])
+        /* The keycaps sit where the sentence's %@ is, so each language
+           keeps its own word order around them. */
+        let sentence = L("Press %@ to open your clipboard history")
+            .components(separatedBy: "%@")
+        var shortcutViews: [NSView] = []
+        if let before = sentence.first?.trimmingCharacters(in: .whitespaces), !before.isEmpty {
+            shortcutViews.append(labelView(before))
+        }
+        shortcutViews += [keycap("⌘"), keycap("⌥"), keycap("C")]
+        if sentence.count > 1, case let after = sentence[1].trimmingCharacters(in: .whitespaces),
+            !after.isEmpty
+        {
+            shortcutViews.append(labelView(after))
+        }
+        let shortcutRow = NSStackView(views: shortcutViews)
         shortcutRow.orientation = .horizontal
         shortcutRow.spacing = 6
 
@@ -188,7 +198,7 @@ private final class OnboardingIllustrationView: NSView {
         NSColor.black.withAlphaComponent(0.06).setFill()
         NSBezierPath(roundedRect: search, xRadius: 6, yRadius: 6).fill()
         NSAttributedString(
-            string: "Search",
+            string: L("Search"),
             attributes: [
                 .font: NSFont.systemFont(ofSize: 10),
                 .foregroundColor: NSColor.black.withAlphaComponent(0.35),

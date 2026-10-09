@@ -7,7 +7,10 @@ import QuickLookThumbnailing
    ↑/↓ move the selection, Return (or a double-click) copies it back to the
    pasteboard, Escape clears the search — or, already empty, dismisses (as
    does clicking elsewhere). A trash button beside the search field offers
-   Clear History, confirmed inside the panel itself. */
+   Clear History, confirmed inside the panel itself. Dragged by the strip
+   above the search field, the panel is pinned there: it opens in that spot
+   from then on, and a pin beside the trash unpins it, back to opening at
+   the pointer. */
 final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableViewDelegate,
     NSWindowDelegate, NSSearchFieldDelegate, NSMenuDelegate
 {
@@ -22,6 +25,14 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
     /* Clear History, and the confirmation that replaces the whole list
        while the question is up. */
     private let clearButton = NSButton()
+    private let unpinButton = PinButton()
+    /* The search field ends at the reset button while it's shown, at the
+       trash otherwise. */
+    private var searchEndsAtClear: NSLayoutConstraint!
+    private var searchEndsAtPin: NSLayoutConstraint!
+    /* Set when the drag strip is grabbed; moves while it's set are the
+       user's, and get remembered (see windowDidMove). */
+    private var isUserDragging = false
     private let confirmView = NSStackView()
     private let confirmLabel = NSTextField(labelWithString: "")
     private var isConfirmingClear = false
@@ -74,7 +85,10 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
            glass. The shadow is drawn in-window instead (see the shadow view
            in configureContent), which is deterministic. */
         panel.hasShadow = false
-        panel.isMovableByWindowBackground = true
+        /* Only the drag strip moves the panel (see DragHandleView): with
+           the position remembered, a stray drag on the background would
+           otherwise relocate every future open. */
+        panel.isMovableByWindowBackground = false
         panel.isReleasedWhenClosed = false
         panel.hidesOnDeactivate = false
         panel.level = .popUpMenu
@@ -109,10 +123,10 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
         let contextMenu = NSMenu()
         contextMenu.delegate = self
         let copyItem = NSMenuItem(
-            title: "Copy", action: #selector(copyClickedRow), keyEquivalent: "")
+            title: L("Copy"), action: #selector(copyClickedRow), keyEquivalent: "")
         copyItem.target = self
         let deleteItem = NSMenuItem(
-            title: "Delete", action: #selector(deleteClickedRow), keyEquivalent: "")
+            title: L("Delete"), action: #selector(deleteClickedRow), keyEquivalent: "")
         deleteItem.target = self
         contextMenu.addItem(copyItem)
         contextMenu.addItem(deleteItem)
@@ -130,27 +144,47 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
 
         /* Sticky by construction: the field sits above the scroll view on
            the glass, so the list scrolls beneath it. */
-        searchField.placeholderString = "Search"
+        searchField.placeholderString = L("Search")
         searchField.font = .systemFont(ofSize: 13)
         searchField.focusRingType = .none
         searchField.delegate = self
         searchField.translatesAutoresizingMaskIntoConstraints = false
 
-        /* Clear History: a bare trash glyph at the search field's right,
-           the field's height, in the same secondary tone as the field's
-           own icon. Dimmed rather than removed when there's nothing to
-           clear, so the header never shifts. */
+        /* Clear History: a round glass button at the search field's right,
+           the field's height. Dimmed rather than removed when there's
+           nothing to clear, so the header never shifts. */
         clearButton.image = NSImage(
-            systemSymbolName: "trash", accessibilityDescription: "Clear History")?
+            systemSymbolName: "trash", accessibilityDescription: L("Clear History"))?
             .withSymbolConfiguration(.init(pointSize: 13, weight: .medium))
         clearButton.imagePosition = .imageOnly
-        clearButton.isBordered = false
-        clearButton.contentTintColor = .secondaryLabelColor
-        clearButton.toolTip = "Clear History"
-        clearButton.setAccessibilityLabel("Clear History")
+        clearButton.bezelStyle = .glass
+        clearButton.borderShape = .circle
+        clearButton.controlSize = .large
+        clearButton.toolTip = L("Clear History")
+        clearButton.setAccessibilityLabel(L("Clear History"))
         clearButton.target = self
         clearButton.action = #selector(clearHistoryClicked)
         clearButton.translatesAutoresizingMaskIntoConstraints = false
+
+        /* Unpin: the same round glass button, left of the trash, shown only
+           while the panel is pinned to a dragged-to spot. The pin says why
+           it's there; under the pointer it turns into what a click does. */
+        let pinSymbol = NSImage.SymbolConfiguration(pointSize: 13, weight: .medium)
+        unpinButton.pinImage = NSImage(
+            systemSymbolName: "pin.fill", accessibilityDescription: L("Unpin"))?
+            .withSymbolConfiguration(pinSymbol)
+        unpinButton.unpinImage = NSImage(
+            systemSymbolName: "pin.slash.fill", accessibilityDescription: L("Unpin"))?
+            .withSymbolConfiguration(pinSymbol)
+        unpinButton.imagePosition = .imageOnly
+        unpinButton.bezelStyle = .glass
+        unpinButton.borderShape = .circle
+        unpinButton.controlSize = .large
+        unpinButton.toolTip = L("Unpin")
+        unpinButton.setAccessibilityLabel(L("Unpin"))
+        unpinButton.target = self
+        unpinButton.action = #selector(unpinClicked)
+        unpinButton.translatesAutoresizingMaskIntoConstraints = false
 
         /* The confirmation takes the list's place rather than opening an
            alert: a second window would take key status from this
@@ -160,10 +194,10 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
         confirmLabel.font = .systemFont(ofSize: 13)
         confirmLabel.alignment = .center
         let cancelButton = NSButton(
-            title: "Cancel", target: self, action: #selector(cancelClearClicked))
+            title: L("Cancel"), target: self, action: #selector(cancelClearClicked))
         cancelButton.bezelStyle = .rounded
         let confirmButton = NSButton(
-            title: "Clear", target: self, action: #selector(confirmClearClicked))
+            title: L("Clear"), target: self, action: #selector(confirmClearClicked))
         confirmButton.bezelStyle = .rounded
         confirmButton.keyEquivalent = "\r"
         confirmButton.hasDestructiveAction = true
@@ -198,6 +232,7 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
         content.addSubview(searchField)
         content.addSubview(emptyLabel)
         content.addSubview(clearButton)
+        content.addSubview(unpinButton)
         content.addSubview(confirmView)
 
         /* The glass sits inset in a transparent margin; a content-less layer
@@ -216,29 +251,60 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
         glass.contentView = content
 
         let grip = ResizeGripView(frame: glassFrame)
-        grip.onProposeSize = { [weak self] size in self?.applyGlassSize(size) }
+        grip.minSize = Self.minGlassSize
+        grip.cornerRadius = Self.cornerRadius
+        grip.onProposeFrame = { [weak self] frame in self?.applyGlassFrame(frame) }
         grip.onDragEnded = { [weak self] in self?.saveGlassSize() }
 
         /* The root must already have its final size when the autoresizing
            subviews are added: contentView assignment resizes it to the
            window, and springs added while it was zero-sized would misread
            that first resize as a (huge) delta to distribute. */
-        let root = NSView(frame: NSRect(origin: .zero, size: panel.frame.size))
+        let root = PanelRootView(frame: NSRect(origin: .zero, size: panel.frame.size))
         let hairline = HairlineBorderView(frame: glassFrame, cornerRadius: Self.cornerRadius)
-        for view in [shadow, glass, hairline, grip] {
+        for view in [shadow, glass, hairline] {
             view.autoresizingMask = [.width, .height]
             root.addSubview(view)
         }
+        /* The strip above the search field, below the top resize band:
+           pinned to the card's top edge through resizes. Under the grip, so
+           the corner resize zones win where they overlap it. */
+        let handle = DragHandleView(
+            frame: NSRect(
+                x: glassFrame.minX,
+                y: glassFrame.maxY - Self.searchFieldTop,
+                width: glassFrame.width,
+                height: Self.searchFieldTop - ResizeGripView.topBand))
+        handle.autoresizingMask = [.width, .minYMargin]
+        handle.onDragBegan = { [weak self] in self?.isUserDragging = true }
+        root.addSubview(handle)
+        grip.autoresizingMask = [.width, .height]
+        root.addSubview(grip)
+        /* Topmost, so its rect wins over the bands' while a drag runs. */
+        let dragCursor = DragCursorView(frame: root.bounds)
+        dragCursor.autoresizingMask = [.width, .height]
+        root.addSubview(dragCursor)
+        grip.dragCursorView = dragCursor
+        root.dragCursorView = dragCursor
         panel.contentView = root
 
         scrollView.stickyHeaderInset = Self.searchAreaHeight
         scrollView.headerFadeTop = Self.searchFieldBottom
+        searchEndsAtClear = searchField.trailingAnchor.constraint(
+            equalTo: clearButton.leadingAnchor, constant: -6)
+        searchEndsAtPin = searchField.trailingAnchor.constraint(
+            equalTo: unpinButton.leadingAnchor, constant: -6)
         NSLayoutConstraint.activate([
-            searchField.topAnchor.constraint(equalTo: content.topAnchor, constant: 10),
+            searchField.topAnchor.constraint(
+                equalTo: content.topAnchor, constant: Self.searchFieldTop),
             searchField.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 10),
-            searchField.trailingAnchor.constraint(
-                equalTo: clearButton.leadingAnchor, constant: -6),
+            searchEndsAtClear,
             searchField.heightAnchor.constraint(equalToConstant: 28),
+            unpinButton.trailingAnchor.constraint(
+                equalTo: clearButton.leadingAnchor, constant: -6),
+            unpinButton.centerYAnchor.constraint(equalTo: searchField.centerYAnchor),
+            unpinButton.widthAnchor.constraint(equalToConstant: 28),
+            unpinButton.heightAnchor.constraint(equalToConstant: 28),
             clearButton.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -10),
             clearButton.centerYAnchor.constraint(equalTo: searchField.centerYAnchor),
             clearButton.widthAnchor.constraint(equalToConstant: 28),
@@ -262,6 +328,7 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
             confirmView.centerYAnchor.constraint(equalTo: content.centerYAnchor),
         ])
         updateEmptyState()
+        updatePinButton()
     }
 
     /* Matches the corner rounding of Tahoe's context menus. */
@@ -270,18 +337,52 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
        the first row at rest. The list scrolls underneath it (see
        stickyHeaderInset on FadingScrollView). */
     private static let searchAreaHeight: CGFloat = 44
+    /* The padding above the search field, which doubles as the drag strip
+       (less the top resize band). */
+    private static let searchFieldTop: CGFloat = 10
     /* The field's bottom edge (10pt top padding + 28pt field): where rows
        must be fully hidden, and where the dissolve ramp hangs from. */
     private static let searchFieldBottom: CGFloat = 38
     /* The visible glass card; the window is larger by shadowMargin on every
        side so the in-window shadow has room to render. The card is
-       resizable by its right/bottom edges (see ResizeGripView) and the
-       chosen size persists across launches. */
+       resizable by any edge or corner (see ResizeGripView) and the chosen
+       size persists across launches. */
     private static let defaultGlassSize = NSSize(width: 360, height: 320)
     private static let minGlassSize = NSSize(width: 240, height: 160)
     private static let shadowMargin: CGFloat = 40
     private static let glassWidthKey = "panel.glassWidth"
     private static let glassHeightKey = "panel.glassHeight"
+    /* The card's top-left corner in screen coordinates, once dragged. */
+    private static let glassLeftKey = "panel.glassLeft"
+    private static let glassTopKey = "panel.glassTop"
+
+    private var savedGlassTopLeft: NSPoint? {
+        get {
+            let defaults = UserDefaults.standard
+            guard defaults.object(forKey: Self.glassLeftKey) != nil,
+                defaults.object(forKey: Self.glassTopKey) != nil
+            else { return nil }
+            return NSPoint(
+                x: defaults.double(forKey: Self.glassLeftKey),
+                y: defaults.double(forKey: Self.glassTopKey))
+        }
+        set {
+            let defaults = UserDefaults.standard
+            if let newValue {
+                defaults.set(newValue.x, forKey: Self.glassLeftKey)
+                defaults.set(newValue.y, forKey: Self.glassTopKey)
+            } else {
+                defaults.removeObject(forKey: Self.glassLeftKey)
+                defaults.removeObject(forKey: Self.glassTopKey)
+            }
+        }
+    }
+
+    private var glassTopLeft: NSPoint {
+        NSPoint(
+            x: panel.frame.minX + Self.shadowMargin,
+            y: panel.frame.maxY - Self.shadowMargin)
+    }
 
     private var glassSize: NSSize {
         NSSize(
@@ -299,23 +400,21 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
             height: max(height, minGlassSize.height))
     }
 
-    /* Live resize from the grip: the card's top-left corner stays put (the
-       panel opens anchored there, at the cursor), so growth goes right and
-       down like a context menu submenu would. */
-    private func applyGlassSize(_ proposed: NSSize) {
-        let clamped = NSSize(
-            width: max(proposed.width, Self.minGlassSize.width),
-            height: max(proposed.height, Self.minGlassSize.height))
-        var frame = panel.frame
-        let height = clamped.height + Self.shadowMargin * 2
-        frame.origin.y += frame.height - height
-        frame.size = NSSize(width: clamped.width + Self.shadowMargin * 2, height: height)
-        panel.setFrame(frame, display: true)
+    /* Live resize from the grip, which proposes the card's new screen
+       frame (already held to the minimum size, opposite edges pinned). */
+    private func applyGlassFrame(_ glassFrame: NSRect) {
+        isUserDragging = false
+        panel.setFrame(
+            glassFrame.insetBy(dx: -Self.shadowMargin, dy: -Self.shadowMargin), display: true)
     }
 
     private func saveGlassSize() {
         UserDefaults.standard.set(glassSize.width, forKey: Self.glassWidthKey)
         UserDefaults.standard.set(glassSize.height, forKey: Self.glassHeightKey)
+        /* Resizing by the left or top edge moves the corner too. */
+        if savedGlassTopLeft != nil {
+            savedGlassTopLeft = glassTopLeft
+        }
     }
 
     private func show() {
@@ -326,6 +425,7 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
         refilter()
         tableView.sizeLastColumnToFit()
         position()
+        updatePinButton()
         /* Nonactivating: the panel takes key focus for its own keyboard
            handling while the frontmost app stays active underneath. Focus
            lands on the search field so typing filters immediately; the
@@ -430,15 +530,31 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
     }
 
     /* Context-menu-style placement (à la Maccy): the glass card opens with
-       its top-left corner at the mouse cursor, nudged back onto the screen
-       when the cursor sits near an edge. The window itself extends
+       its top-left corner at the mouse cursor, or where it was dragged to
+       last, nudged back onto the screen either way. A dragged-to spot on a
+       display that's no longer connected falls back to the cursor (and is
+       kept, for when the display returns). The window itself extends
        shadowMargin past the card on every side. */
     private func position() {
-        let mouse = NSEvent.mouseLocation
-        let screen = NSScreen.screens.first { $0.frame.contains(mouse) } ?? NSScreen.main
+        isUserDragging = false
+        let anchor: NSPoint
+        let screen: NSScreen?
+        if let saved = savedGlassTopLeft,
+            let home = NSScreen.screens.first(where: {
+                /* Nudged inside: the corner sits on the card's top edge,
+                   which a frame's own maxY doesn't contain. */
+                $0.frame.contains(NSPoint(x: saved.x + 1, y: saved.y - 1))
+            })
+        {
+            anchor = saved
+            screen = home
+        } else {
+            anchor = NSEvent.mouseLocation
+            screen = NSScreen.screens.first { $0.frame.contains(anchor) } ?? NSScreen.main
+        }
         guard let frame = screen?.visibleFrame else { return }
         let size = glassSize
-        var origin = NSPoint(x: mouse.x, y: mouse.y - size.height)
+        var origin = NSPoint(x: anchor.x, y: anchor.y - size.height)
         origin.x = min(max(origin.x, frame.minX), frame.maxX - size.width)
         origin.y = min(max(origin.y, frame.minY), frame.maxY - size.height)
         panel.setFrameOrigin(
@@ -505,7 +621,9 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
         panel.makeFirstResponder(nil)
         panel.capturesAllKeys = true
         updateConfirmLabel()
-        for view in [scrollView, blurStrip, searchField, clearButton] as [NSView] {
+        for view in [scrollView, blurStrip, searchField, clearButton, unpinButton]
+            as [NSView]
+        {
             view.isHidden = true
         }
         updateEmptyState()
@@ -519,6 +637,7 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
         for view in [scrollView, blurStrip, searchField, clearButton] as [NSView] {
             view.isHidden = false
         }
+        updatePinButton()
         updateEmptyState()
         panel.capturesAllKeys = false
         panel.makeFirstResponder(searchField)
@@ -534,7 +653,7 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
     private func updateConfirmLabel() {
         let count = store.items.count
         confirmLabel.stringValue =
-            count == 1 ? "Clear the only item?" : "Clear all \(count) items?"
+            count == 1 ? L("Clear the only item?") : L("Clear all %d items?", count)
     }
 
     func menuWillOpen(_ menu: NSMenu) {
@@ -555,11 +674,26 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
 
     private var isContextMenuOpen = false
 
+    @objc private func unpinClicked() {
+        savedGlassTopLeft = nil
+        updatePinButton()
+        /* The panel stays where it is; the next open follows the cursor. */
+        panel.makeFirstResponder(searchField)
+    }
+
+    private func updatePinButton() {
+        let pinned = savedGlassTopLeft != nil
+        unpinButton.isHidden = !pinned || isConfirmingClear
+        /* Deactivate first: both active at once is a conflict. */
+        (pinned ? searchEndsAtClear : searchEndsAtPin).isActive = false
+        (pinned ? searchEndsAtPin : searchEndsAtClear).isActive = true
+    }
+
     /* The placeholder and the trash button both follow the store: nothing
        to show and nothing to clear when it's empty. */
     private func updateEmptyState() {
         emptyLabel.isHidden = !filteredItems.isEmpty || isConfirmingClear
-        emptyLabel.stringValue = store.items.isEmpty ? "Nothing copied yet" : "No Results"
+        emptyLabel.stringValue = store.items.isEmpty ? L("Nothing copied yet") : L("No Results")
         clearButton.isEnabled = !store.items.isEmpty
     }
 
@@ -696,13 +830,13 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
 
     private static func imageLabel(for preview: NSImage?) -> String {
         guard let rep = preview?.representations.first as? NSBitmapImageRep else {
-            return "Image"
+            return L("Image")
         }
-        return "Image \(rep.pixelsWide)\u{2009}×\u{2009}\(rep.pixelsHigh)"
+        return L("Image") + " \(rep.pixelsWide)\u{2009}×\u{2009}\(rep.pixelsHigh)"
     }
 
     private static func filesLabel(for urls: [URL]) -> String {
-        guard let first = urls.first else { return "Files" }
+        guard let first = urls.first else { return L("Files") }
         return urls.count == 1
             ? first.lastPathComponent
             : "\(first.lastPathComponent) +\(urls.count - 1)"
@@ -734,6 +868,22 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
     }
 
     // MARK: - NSWindowDelegate
+
+    /* Moves after the strip is grabbed are the user's: remember each one.
+       performDrag returns at once and the window server reports the drag
+       here every ~100 ms, the last report sometimes after the button is up
+       (measured 2026-10-09), so a move with the button up is taken as the
+       drag's end: saved, then the flag cleared so a later system nudge (a
+       display rearranged) doesn't count. Otherwise the next programmatic
+       placement clears it. */
+    func windowDidMove(_ notification: Notification) {
+        guard isUserDragging else { return }
+        savedGlassTopLeft = glassTopLeft
+        updatePinButton()
+        if NSEvent.pressedMouseButtons & 1 == 0 {
+            isUserDragging = false
+        }
+    }
 
     func windowDidResignKey(_ notification: Notification) {
         /* The row context menu takes key status while it's up; that's not
@@ -786,89 +936,315 @@ private final class MenuShadowView: NSView {
     }
 }
 
-/* Invisible resize handles along the card's right and bottom edges. The
-   window's own edges sit shadowMargin outside the visible card, so the
-   system's borderless-resize border would be floating in transparent
-   space — hence manual tracking on the card boundary itself. The top-left
-   stays anchored (that's where the panel opens, at the cursor), so only
-   right/bottom/corner resize. */
-private final class ResizeGripView: NSView {
-    /* Narrow enough to leave most of the overlay scroller, which lives in
-       the same right-edge strip, clickable. */
-    private static let band: CGFloat = 6
-    /* The diagonal zone at the bottom-right corner, where both axes resize
-       at once. Much larger than the bands' 6×6 overlap: that square is too
-       small to aim at, and half of it lies outside the rounded corner. */
-    private static let cornerZone: CGFloat = 18
+/* Covers the whole window, shadow margin included, with one cursor rect
+   while a resize drag runs (see ResizeGripView.mouseDown); otherwise
+   inert. Never hit-tested.
 
-    private func isInCorner(_ point: NSPoint) -> Bool {
-        point.x >= bounds.maxX - Self.cornerZone && point.y <= Self.cornerZone
+   The rect alone held the shape only while the card shrank. Growing, the
+   pointer runs ahead of the edge into the shadow margin, and a fully
+   transparent pixel belongs to the window below even mid-drag, so the
+   arrow came back on every step outward (measured 2026-10-09). For the
+   drag the view fills the window at alpha 1/255: invisible, but no longer
+   transparent to the window server, so the pointer stays on Coffer's
+   window and inside the rect. */
+/* The panel's root. The band rects stay registered during a resize drag
+   (dropping them counts as leaving them, and the arrow wins), but the
+   window's resize keeps sliding them across the pointer. Each crossing
+   sends a cursor update to whichever view is under the pointer, and it
+   climbs the superview chain to AppKit's default, which sets the arrow:
+   the top band did so one step in three (measured 2026-10-09). Every such
+   update passes through here, so the drag's shape answers it instead. */
+private final class PanelRootView: NSView {
+    weak var dragCursorView: DragCursorView?
+
+    override func cursorUpdate(with event: NSEvent) {
+        if let cursor = dragCursorView?.cursor {
+            cursor.set()
+        } else {
+            super.cursorUpdate(with: event)
+        }
+    }
+}
+
+/* The unpin button: a pin while it sits there, a struck-through pin while
+   the pointer is over it. The tracking area is active always, as the panel
+   never makes Coffer the active app. */
+private final class PinButton: NSButton {
+    var pinImage: NSImage? { didSet { image = pinImage } }
+    var unpinImage: NSImage?
+    private var hoverArea: NSTrackingArea?
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let hoverArea { removeTrackingArea(hoverArea) }
+        let area = NSTrackingArea(
+            rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+            owner: self)
+        addTrackingArea(area)
+        hoverArea = area
     }
 
-    var onProposeSize: ((NSSize) -> Void)?
+    override func mouseEntered(with event: NSEvent) { image = unpinImage }
+    override func mouseExited(with event: NSEvent) { image = pinImage }
+
+    /* Hidden by its own click, with the pointer still over it: no exit
+       follows, so the pin comes back here for the next time it shows. */
+    override func viewDidHide() {
+        super.viewDidHide()
+        image = pinImage
+    }
+}
+
+private final class DragCursorView: NSView {
+    var cursor: NSCursor? {
+        didSet {
+            guard cursor !== oldValue else { return }
+            layer?.backgroundColor =
+                cursor == nil ? nil : NSColor(white: 0, alpha: 1 / 255).cgColor
+            window?.invalidateCursorRects(for: self)
+        }
+    }
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        wantsLayer = true
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) is not supported")
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    override func resetCursorRects() {
+        guard let cursor else { return }
+        addCursorRect(bounds, cursor: cursor)
+    }
+}
+
+/* The drag strip above the search field. performDrag hands the gesture to
+   the window server, as a title bar does; the controller notices the move
+   through windowDidMove. */
+private final class DragHandleView: NSView {
+    var onDragBegan: (() -> Void)?
+
+    override var mouseDownCanMoveWindow: Bool { false }
+
+    override func mouseDown(with event: NSEvent) {
+        onDragBegan?()
+        window?.performDrag(with: event)
+    }
+}
+
+/* Invisible resize handles along the card's four edges and corners. The
+   window's own edges sit shadowMargin outside the visible card, so the
+   system's borderless-resize border would be floating in transparent
+   space — hence manual tracking on the card boundary itself. Dragging an
+   edge moves only that edge; the opposite one stays put. */
+private final class ResizeGripView: NSView {
+    /* Narrow enough to leave most of the overlay scroller, which lives in
+       the same right-edge strip, clickable — and the search field and
+       clear button, 10pt in from the top, untouched. */
+    private static let band: CGFloat = 6
+    /* Thinner on top: the rest of the padding above the search field is
+       the drag strip (DragHandleView). */
+    static let topBand: CGFloat = 4
+    /* The diagonal zones at the corners, where both axes resize at once.
+       Much larger than the bands' 6×6 overlap: that square is too small to
+       aim at, and half of it lies outside the rounded corner. */
+    private static let cornerZone: CGFloat = 18
+
+    private struct Edges: OptionSet {
+        let rawValue: Int
+        static let left = Edges(rawValue: 1 << 0)
+        static let right = Edges(rawValue: 1 << 1)
+        static let bottom = Edges(rawValue: 1 << 2)
+        static let top = Edges(rawValue: 1 << 3)
+    }
+
+    var minSize = NSSize.zero
+    /* The full-window cursor rect used while a resize drag runs. */
+    weak var dragCursorView: DragCursorView?
+    var onProposeFrame: ((NSRect) -> Void)?
     var onDragEnded: (() -> Void)?
 
     private var startMouse = NSPoint.zero
-    private var startSize = NSSize.zero
-    private var resizesRight = false
-    private var resizesDown = false
+    private var startFrame = NSRect.zero
+    private var dragging: Edges = []
 
-    /* Only the edge bands are interactive; everything else falls through
-       to the list below. */
+    /* Which edges a point grabs: a corner zone grabs both of its edges,
+       a band one. Empty means the point belongs to the list below. */
+    private func edges(at point: NSPoint) -> Edges {
+        guard bounds.contains(point) else { return [] }
+        let nearLeft = point.x <= Self.cornerZone
+        let nearRight = point.x >= bounds.maxX - Self.cornerZone
+        let nearBottom = point.y <= Self.cornerZone
+        let nearTop = point.y >= bounds.maxY - Self.cornerZone
+        if (nearLeft || nearRight) && (nearBottom || nearTop) {
+            return [nearLeft ? .left : .right, nearBottom ? .bottom : .top]
+        }
+        var edges: Edges = []
+        if point.x <= Self.band { edges.insert(.left) }
+        if point.x >= bounds.maxX - Self.band { edges.insert(.right) }
+        if point.y <= Self.band { edges.insert(.bottom) }
+        if point.y >= bounds.maxY - Self.topBand { edges.insert(.top) }
+        return edges
+    }
+
+    /* Only the edge bands and corners are interactive; everything else
+       falls through to the list below. */
     override func hitTest(_ point: NSPoint) -> NSView? {
-        let local = convert(point, from: superview)
-        guard bounds.contains(local) else { return nil }
-        let inBand =
-            isInCorner(local) || local.x >= bounds.maxX - Self.band
-            || local.y <= Self.band
-        return inBand ? self : nil
+        edges(at: convert(point, from: superview)).isEmpty ? nil : self
     }
 
     override var mouseDownCanMoveWindow: Bool { false }
 
+    /* The card's corner rounding, so the corner cursor zones can start
+       where the glass does. */
+    var cornerRadius: CGFloat = 0
+
+    /* Cursors go through cursor rects: with Coffer never the active app,
+       AppKit's cursor machinery is the only way a cursor takes. A plain
+       NSCursor.set() from a move handler is ignored (measured 2026-10-09
+       with a probe reading the system cursor: five mouseMoved calls on a
+       corner, arrow throughout). Two things made the rects miss when the
+       pointer came from outside:
+       - Corners: a rect reaching into the transparent rounded corner was
+         entered over a pixel that belongs to the window below, so its
+         cursor never took, and the pointer was already inside it by the
+         time it reached the glass. The corner rects now start where the
+         arc does, so they are entered over the card.
+       - Edges, now and then: the app under the transparent shadow margin
+         had the pointer a moment earlier and set its own cursor after
+         ours (seen 4 ms later with a Chromium browser underneath). Hence
+         the re-apply below. */
     override func resetCursorRects() {
+        let zone = Self.cornerZone
+        let band = Self.band
+        /* Where the arc meets the corner square's diagonal. */
+        let arcInset = cornerRadius * (1 - 1 / 2.squareRoot())
+        let corner = zone - arcInset
+        let midWidth = bounds.width - zone * 2
+        let midHeight = bounds.height - zone * 2
         addCursorRect(
-            NSRect(
-                x: bounds.maxX - Self.band, y: Self.cornerZone,
-                width: Self.band, height: bounds.height - Self.cornerZone),
+            NSRect(x: 0, y: zone, width: band, height: midHeight), cursor: .resizeLeftRight)
+        addCursorRect(
+            NSRect(x: bounds.maxX - band, y: zone, width: band, height: midHeight),
             cursor: .resizeLeftRight)
         addCursorRect(
-            NSRect(x: 0, y: 0, width: bounds.width - Self.cornerZone, height: Self.band),
-            cursor: .resizeUpDown)
+            NSRect(x: zone, y: 0, width: midWidth, height: band), cursor: .resizeUpDown)
         addCursorRect(
             NSRect(
-                x: bounds.maxX - Self.cornerZone, y: 0,
-                width: Self.cornerZone, height: Self.cornerZone),
-            cursor: .frameResize(position: .bottomRight, directions: .all))
+                x: zone, y: bounds.maxY - Self.topBand, width: midWidth, height: Self.topBand),
+            cursor: .resizeUpDown)
+        let corners: [(NSPoint, NSCursor.FrameResizePosition)] = [
+            (NSPoint(x: arcInset, y: arcInset), .bottomLeft),
+            (NSPoint(x: bounds.maxX - zone, y: arcInset), .bottomRight),
+            (NSPoint(x: arcInset, y: bounds.maxY - zone), .topLeft),
+            (NSPoint(x: bounds.maxX - zone, y: bounds.maxY - zone), .topRight),
+        ]
+        for (origin, position) in corners {
+            addCursorRect(
+                NSRect(origin: origin, size: NSSize(width: corner, height: corner)),
+                cursor: .frameResize(position: position, directions: .all))
+        }
+    }
+
+    /* Re-applying the rects a few times just after the pointer reaches a
+       band outlasts a late setter underneath: invalidating them makes
+       AppKit set the cursor for wherever the pointer is, through the same
+       path the rects use. The tracking area only notices the arrival. */
+    private var isOverBand = false
+    private var reapplyGeneration = 0
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        trackingAreas.forEach(removeTrackingArea)
+        addTrackingArea(
+            NSTrackingArea(
+                rect: .zero,
+                options: [.mouseEnteredAndExited, .mouseMoved, .activeAlways, .inVisibleRect],
+                owner: self))
+    }
+
+    override func mouseEntered(with event: NSEvent) { noteBand(for: event) }
+    override func mouseMoved(with event: NSEvent) { noteBand(for: event) }
+    override func mouseExited(with event: NSEvent) { isOverBand = false }
+
+    private func noteBand(for event: NSEvent) {
+        let overBand = !edges(at: convert(event.locationInWindow, from: nil)).isEmpty
+        defer { isOverBand = overBand }
+        guard overBand, !isOverBand, dragging.isEmpty else { return }
+        reapplyGeneration += 1
+        let generation = reapplyGeneration
+        for delay in [0.03, 0.1, 0.25] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                guard let self, generation == reapplyGeneration, isOverBand,
+                    dragging.isEmpty
+                else { return }
+                window?.invalidateCursorRects(for: self)
+            }
+        }
     }
 
     override func mouseDown(with event: NSEvent) {
-        let local = convert(event.locationInWindow, from: nil)
-        let corner = isInCorner(local)
-        resizesRight = corner || local.x >= bounds.maxX - Self.band
-        resizesDown = corner || local.y <= Self.band
+        dragging = edges(at: convert(event.locationInWindow, from: nil))
         /* Screen coordinates, not window-local: the window itself moves and
            resizes during the drag, which would shift the local frame of
            reference mid-gesture. */
         startMouse = NSEvent.mouseLocation
-        startSize = bounds.size
+        startFrame = window?.convertToScreen(convert(bounds, to: nil)) ?? .zero
+        /* Every resize step changes the window's frame, and AppKit rebuilds
+           the cursor rects for each. The edge trails the pointer by a step,
+           so the rebuild found the pointer off the band and showed the
+           arrow about half the time (measured 2026-10-09, 22–30 of 60
+           samples per drag). Setting the cursor directly doesn't take while
+           Coffer is inactive, and disabling the rects left the arrow on
+           (57 of 60), so instead the whole window carries the drag's shape
+           for the duration: wherever the pointer is, ahead of the edge,
+           behind it, or past a card stopped at its minimum size. */
+        dragCursorView?.cursor = Self.cursor(for: dragging)
+    }
+
+    private static func cursor(for edges: Edges) -> NSCursor? {
+        switch edges {
+        case [.left], [.right]: .resizeLeftRight
+        case [.top], [.bottom]: .resizeUpDown
+        case [.left, .bottom]: .frameResize(position: .bottomLeft, directions: .all)
+        case [.right, .bottom]: .frameResize(position: .bottomRight, directions: .all)
+        case [.left, .top]: .frameResize(position: .topLeft, directions: .all)
+        case [.right, .top]: .frameResize(position: .topRight, directions: .all)
+        default: nil
+        }
     }
 
     override func mouseDragged(with event: NSEvent) {
-        guard resizesRight || resizesDown else { return }
+        guard !dragging.isEmpty else { return }
         let mouse = NSEvent.mouseLocation
-        onProposeSize?(
-            NSSize(
-                width: startSize.width + (resizesRight ? mouse.x - startMouse.x : 0),
-                height: startSize.height + (resizesDown ? startMouse.y - mouse.y : 0)))
+        let dx = mouse.x - startMouse.x
+        let dy = mouse.y - startMouse.y
+        /* Each dragged edge follows the mouse until the card hits its
+           minimum size; the edges not being dragged never move. */
+        var minX = startFrame.minX
+        var maxX = startFrame.maxX
+        var minY = startFrame.minY
+        var maxY = startFrame.maxY
+        if dragging.contains(.left) { minX = min(minX + dx, maxX - minSize.width) }
+        if dragging.contains(.right) { maxX = max(maxX + dx, minX + minSize.width) }
+        if dragging.contains(.bottom) { minY = min(minY + dy, maxY - minSize.height) }
+        if dragging.contains(.top) { maxY = max(maxY + dy, minY + minSize.height) }
+        onProposeFrame?(NSRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY))
     }
 
     override func mouseUp(with event: NSEvent) {
-        if resizesRight || resizesDown {
-            onDragEnded?()
-        }
-        resizesRight = false
-        resizesDown = false
+        guard !dragging.isEmpty else { return }
+        dragging = []
+        onDragEnded?()
+        /* Back to the band rects, applied for wherever the pointer was
+           let go: still a resize shape on the band, the arrow off it. */
+        dragCursorView?.cursor = nil
+        window?.invalidateCursorRects(for: self)
     }
 }
 

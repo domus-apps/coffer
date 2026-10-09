@@ -20,7 +20,7 @@ final class UpdaterController {
 
     func makeMenuItem() -> NSMenuItem {
         let item = NSMenuItem(
-            title: "Check for Updates…",
+            title: L("Check for Updates…"),
             action: #selector(SPUStandardUpdaterController.checkForUpdates(_:)),
             keyEquivalent: "")
         item.target = controller

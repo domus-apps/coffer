@@ -128,29 +128,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func setUpMainMenu() {
         let appMenu = NSMenu()
         let historyItem = NSMenuItem(
-            title: "Clipboard History", action: #selector(showHistory), keyEquivalent: "c")
+            title: L("Clipboard History"), action: #selector(showHistory), keyEquivalent: "c")
         historyItem.keyEquivalentModifierMask = [.command, .option]
         historyItem.target = self
         appMenu.addItem(historyItem)
         let settingsItem = NSMenuItem(
-            title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
+            title: L("Settings…"), action: #selector(openSettings), keyEquivalent: ",")
         settingsItem.target = self
         appMenu.addItem(settingsItem)
         appMenu.addItem(updater.makeMenuItem())
         appMenu.addItem(.separator())
         appMenu.addItem(
             NSMenuItem(
-                title: "Quit Coffer",
+                title: L("Quit Coffer"),
                 action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
 
-        let windowMenu = NSMenu(title: "Window")
+        let windowMenu = NSMenu(title: L("Window"))
         windowMenu.addItem(
             NSMenuItem(
-                title: "Close Window",
+                title: L("Close Window"),
                 action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w"))
         windowMenu.addItem(
             NSMenuItem(
-                title: "Minimize",
+                title: L("Minimize"),
                 action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m"))
 
         let mainMenu = NSMenu()
@@ -275,19 +275,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(about)
         menu.addItem(.separator())
         let history = NSMenuItem(
-            title: "Clipboard History",
+            title: L("Clipboard History"),
             action: #selector(showHistory), keyEquivalent: "c")
         history.keyEquivalentModifierMask = [.command, .option]
         history.target = self
         menu.addItem(history)
         let settings = NSMenuItem(
-            title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
+            title: L("Settings…"), action: #selector(openSettings), keyEquivalent: ",")
         settings.target = self
         menu.addItem(settings)
         menu.addItem(updater.makeMenuItem())
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(
-            title: "Quit Coffer",
+            title: L("Quit Coffer"),
             action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         item.menu = menu
         statusItem = item

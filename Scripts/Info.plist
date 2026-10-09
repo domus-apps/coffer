@@ -9,10 +9,17 @@
 		<string>클립보드</string>
 		<string>clipboard</string>
 	</array>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
 	<key>CFBundleExecutable</key>
 	<string>Coffer</string>
 	<key>CFBundleIdentifier</key>
 	<string>com.jhaemin.coffer</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>ko</string>
+	</array>
 	<key>CFBundleName</key>
 	<string>Coffer</string>
 	<key>CFBundlePackageType</key>

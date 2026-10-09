@@ -9,6 +9,10 @@ APP=build/Coffer.app
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp .build/release/Coffer "$APP/Contents/MacOS/Coffer"
+
+# Localizations: SwiftPM packs the .lproj string tables into a resource
+# bundle that Localization.swift finds inside Contents/Resources.
+cp -R .build/release/Coffer_Coffer.bundle "$APP/Contents/Resources/"
 cp Scripts/Info.plist "$APP/Contents/Info.plist"
 
 # Embed Sparkle.framework (auto-update). The binary references it via

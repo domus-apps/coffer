@@ -4,6 +4,24 @@ All notable changes to Coffer are documented here. The release workflow publishe
 
 Keep each bullet on a single line: release notes render line breaks literally (both on GitHub and in the update dialog), so wrapped lines would break mid-sentence.
 
+## 1.4.0
+
+### Added
+
+- Coffer is available in Korean. The clipboard popup, menus, Settings, and welcome window follow the macOS language.
+- The clipboard popup can be moved by dragging the area above the search field, and it then opens in that spot.
+- A pin next to Clear History shows while the popup is pinned, and clicking it sets the popup back to opening at the pointer.
+
+### Changed
+
+- The clipboard popup can be resized from any edge or corner.
+- The Clear History button has a round glass look.
+
+### Fixed
+
+- The resize pointer sometimes did not appear when moving onto the popup's edge from outside.
+- The pointer sometimes flickered to an arrow while resizing the popup.
+
 ## 1.3.3
 
 ### Fixed

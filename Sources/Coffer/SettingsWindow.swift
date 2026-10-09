@@ -11,7 +11,7 @@ enum SettingsPane: Int, CaseIterable {
 
     var title: String {
         switch self {
-        case .general: "General"
+        case .general: L("General")
         }
     }
 
@@ -332,12 +332,12 @@ struct GeneralSettingsView: View {
             Section {
                 VStack(alignment: .leading, spacing: 3) {
                     Toggle(
-                        "Launch at login",
+                        L("Launch at login"),
                         isOn: model.binding({ model.launchAtLogin }, { model.launchAtLogin = $0 })
                     )
                     .disabled(!model.isBundledApp)
                     if !model.isBundledApp {
-                        Text("Available in the bundled app only (Scripts/bundle.sh).")
+                        Text(L("Available in the bundled app only (Scripts/bundle.sh)."))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -345,15 +345,15 @@ struct GeneralSettingsView: View {
 
                 VStack(alignment: .leading, spacing: 3) {
                     Toggle(
-                        "Hide menu bar icon",
+                        L("Hide menu bar icon"),
                         isOn: model.binding(
                             { AppPreferences.isMenuBarIconHidden },
                             { AppPreferences.isMenuBarIconHidden = $0 }))
                     Text(
-                        "⌥⌘C still opens the history. While hidden, launch Coffer again to "
-                            + "open Settings. The app appears in the Dock only while this "
-                            + "window is open."
-                    )
+                        L(
+                            "⌥⌘C still opens the history. While hidden, launch Coffer again "
+                                + "to open Settings. The app appears in the Dock only while "
+                                + "this window is open."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 }
@@ -362,18 +362,20 @@ struct GeneralSettingsView: View {
             Section {
                 HistoryLimitRow(model: model)
             } header: {
-                Text("History")
+                Text(L("History"))
             } footer: {
                 let range = AppPreferences.historyLimitRange
                 Text(
-                    "Between \(range.lowerBound) and \(range.upperBound). The history lives "
-                        + "in memory, images in full, so a higher cap uses more RAM. Lowering "
-                        + "it removes the oldest items immediately.")
+                    L(
+                        "Between %1$d and %2$d. The history lives in memory, images in full, "
+                            + "so a higher cap uses more RAM. Lowering it removes the oldest "
+                            + "items immediately.",
+                        range.lowerBound, range.upperBound))
             }
 
-            Section("Updates") {
-                LabeledContent("Version", value: model.versionLabel)
-                Button("Check for Updates…") {
+            Section(L("Updates")) {
+                LabeledContent(L("Version"), value: model.versionLabel)
+                Button(L("Check for Updates…")) {
                     model.updater.checkForUpdates()
                 }
                 .disabled(!model.updater.canCheckForUpdates)
@@ -394,7 +396,7 @@ private struct HistoryLimitRow: View {
     @FocusState private var isEditing: Bool
 
     var body: some View {
-        LabeledContent("Keep clipboard items") {
+        LabeledContent(L("Keep clipboard items")) {
             HStack(spacing: 6) {
                 TextField("", text: $text)
                     .labelsHidden()
@@ -414,7 +416,7 @@ private struct HistoryLimitRow: View {
                     in: AppPreferences.historyLimitRange, step: 10
                 )
                 .labelsHidden()
-                Button("Reset to Default") {
+                Button(L("Reset to Default")) {
                     AppPreferences.historyLimit = AppPreferences.defaultHistoryLimit
                 }
                 .controlSize(.small)
