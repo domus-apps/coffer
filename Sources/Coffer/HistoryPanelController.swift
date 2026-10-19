@@ -5,7 +5,9 @@ import QuickLookThumbnailing
 /* The ⌘⌥C palette: a floating, nonactivating panel listing the history
    newest-first under a sticky search field. Typing filters the list live,
    ↑/↓ move the selection, Return (or a double-click) copies it back to the
-   pasteboard (⌥Return: a file row's path instead), Escape clears the search — or, already empty, dismisses (as does
+   pasteboard (⌥Return: a file row's path instead) and ⌘Return pastes it
+   too, or the other way around with Paste with Return on. Escape clears
+   the search — or, already empty, dismisses (as does
    clicking elsewhere). A row, or its preview, can be dragged out. A trash button beside the search field offers
    Clear History, confirmed inside the panel itself. Dragged by the strip
    above the search field, the panel is pinned there: it opens in that spot
@@ -38,6 +40,10 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
        user's, and get remembered (see windowDidMove). */
     private var isUserDragging = false
     private let confirmView = NSStackView()
+    private let copyMenuItem = NSMenuItem()
+    private let copyPathMenuItem = NSMenuItem()
+    private let pasteMenuItem = NSMenuItem()
+    private let pastePathMenuItem = NSMenuItem()
     private let confirmLabel = NSTextField(labelWithString: "")
     private var isConfirmingClear = false
     /* What the table shows: the store filtered by the current query. The
@@ -169,24 +175,32 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
            close-on-resign-key while the menu is up (see menuWillOpen). */
         let contextMenu = NSMenu()
         contextMenu.delegate = self
-        /* The Return shortcuts shown beside the two copies, for discovery;
-           the keys themselves are handled by the panel (see commit). */
-        let copyItem = NSMenuItem(
-            title: L("Copy"), action: #selector(copyClickedRow), keyEquivalent: "\r")
-        copyItem.keyEquivalentModifierMask = []
-        copyItem.target = self
+        /* The Return shortcuts shown beside the copies and pastes, for
+           discovery; the keys themselves are handled by the panel (see
+           commit). Which pair takes plain Return follows the setting (see
+           menuNeedsUpdate). */
+        copyMenuItem.title = L("Copy")
+        copyMenuItem.action = #selector(copyClickedRow)
+        copyPathMenuItem.title = L("Copy Path")
+        copyPathMenuItem.action = #selector(copyPathClickedRow)
+        pasteMenuItem.title = L("Paste")
+        pasteMenuItem.action = #selector(pasteClickedRow)
+        pastePathMenuItem.title = L("Paste Path")
+        pastePathMenuItem.action = #selector(pastePathClickedRow)
+        for item in [copyMenuItem, copyPathMenuItem, pasteMenuItem, pastePathMenuItem] {
+            item.keyEquivalent = "\r"
+            item.target = self
+        }
         let deleteItem = NSMenuItem(
             title: L("Delete"), action: #selector(deleteClickedRow), keyEquivalent: "")
         deleteItem.target = self
-        let copyPathItem = NSMenuItem(
-            title: L("Copy Path"), action: #selector(copyPathClickedRow), keyEquivalent: "\r")
-        copyPathItem.keyEquivalentModifierMask = [.option]
-        copyPathItem.target = self
         let previewItem = NSMenuItem(
             title: L("Preview"), action: #selector(previewClickedRow), keyEquivalent: "")
         previewItem.target = self
-        contextMenu.addItem(copyItem)
-        contextMenu.addItem(copyPathItem)
+        contextMenu.addItem(copyMenuItem)
+        contextMenu.addItem(copyPathMenuItem)
+        contextMenu.addItem(pasteMenuItem)
+        contextMenu.addItem(pastePathMenuItem)
         contextMenu.addItem(previewItem)
         contextMenu.addItem(deleteItem)
         tableView.menu = contextMenu
@@ -619,17 +633,22 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
     }
 
     /* Return answers the confirmation while it's up; otherwise it copies
-       the selected item. ⌥ takes a file row's path instead of the files
-       (other rows have no path: a beep, and the panel stays). Coffer
-       never pastes for you: that would mean posting keystrokes, which
-       needs a permission Coffer otherwise has no use for. */
+       the selected item, or pastes it too (ReturnAction: ⌘ flips the
+       setting). ⌥ takes a file row's path instead of the files (other rows
+       have no path: a beep, and the panel stays). */
     private func commit(with flags: NSEvent.ModifierFlags) {
         if isConfirmingClear {
             performClear()
             return
         }
-        let row = tableView.selectedRow
+        use(row: tableView.selectedRow, flags: flags)
+    }
+
+    private func use(row: Int, flags: NSEvent.ModifierFlags) {
         guard row >= 0, row < filteredItems.count else { return }
+        let action = ReturnAction.forReturn(
+            commandHeld: flags.contains(.command),
+            pastesWithReturn: AppPreferences.pastesWithReturn)
         if flags.contains(.option) {
             guard case .files(let urls) = filteredItems[row] else {
                 NSSound.beep()
@@ -639,6 +658,7 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
         } else {
             copyItem(at: row)
         }
+        if action == .paste { Paster.paste() }
     }
 
     /* Escape backs out one level at a time: the preview, the
@@ -691,10 +711,6 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
     /* Where copies go: the pasteboard the watcher watches. */
     private static var pasteboard: NSPasteboard { PasteboardWatcher.pasteboard }
 
-    private func copySelection() {
-        copyItem(at: tableView.selectedRow)
-    }
-
     private func copyItem(at row: Int) {
         guard row >= 0, row < filteredItems.count else { return }
         let item = filteredItems[row]
@@ -720,6 +736,13 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
         copyItem(at: tableView.clickedRow)
     }
 
+    @objc private func pasteClickedRow() {
+        let row = tableView.clickedRow
+        guard row >= 0, row < filteredItems.count else { return }
+        copyItem(at: row)
+        Paster.paste()
+    }
+
     /* The files' paths as text, one per line, as Finder's Copy as
        Pathname writes them. */
     private func copyPaths(of urls: [URL]) {
@@ -738,6 +761,14 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
         copyPaths(of: urls)
     }
 
+    @objc private func pastePathClickedRow() {
+        let row = tableView.clickedRow
+        guard row >= 0, row < filteredItems.count, case .files(let urls) = filteredItems[row]
+        else { return }
+        copyPaths(of: urls)
+        Paster.paste()
+    }
+
     @objc private func previewClickedRow() {
         let row = tableView.clickedRow
         guard row >= 0, row < filteredItems.count else { return }
@@ -754,7 +785,7 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
         case #selector(previewClickedRow):
             if case .text = item { return false }
             return item != nil
-        case #selector(copyPathClickedRow):
+        case #selector(copyPathClickedRow), #selector(pastePathClickedRow):
             if case .files = item { return true }
             return false
         default:
@@ -832,6 +863,22 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
         isContextMenuOpen = true
     }
 
+    /* Plain Return goes beside whichever pair it triggers, ⌘Return beside
+       the other, and the Return pair comes first. */
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        let pastes = AppPreferences.pastesWithReturn
+        let first = pastes ? [pasteMenuItem, pastePathMenuItem] : [copyMenuItem, copyPathMenuItem]
+        let second = pastes ? [copyMenuItem, copyPathMenuItem] : [pasteMenuItem, pastePathMenuItem]
+        first[0].keyEquivalentModifierMask = []
+        first[1].keyEquivalentModifierMask = [.option]
+        second[0].keyEquivalentModifierMask = [.command]
+        second[1].keyEquivalentModifierMask = [.command, .option]
+        for (index, item) in (first + second).enumerated() {
+            menu.removeItem(item)
+            menu.insertItem(item, at: index)
+        }
+    }
+
     func menuDidClose(_ menu: NSMenu) {
         isContextMenuOpen = false
         /* The menu took key status; unless the chosen action closed the
@@ -892,8 +939,12 @@ final class HistoryPanelController: NSObject, NSTableViewDataSource, NSTableView
         clearButton.isEnabled = !store.items.isEmpty
     }
 
+    /* A double-click acts like Return, ⌘ included. Not ⌥: a path is for
+       the keyboard and the menu, and a ⌥-double-click on a text row would
+       only beep. */
     @objc private func rowDoubleClicked() {
-        copySelection()
+        let flags = NSApp.currentEvent?.modifierFlags ?? []
+        use(row: tableView.selectedRow, flags: flags.intersection(.command))
     }
 
     @objc private func preferencesChanged() {
@@ -2058,6 +2109,19 @@ private final class KeyCapturePanel: NSPanel {
     var capturesAllKeys = false
 
     override var canBecomeKey: Bool { true }
+
+    /* ⌘Return and ⌘⌥Return come through here first, as key equivalents;
+       taken here, they never reach a menu. Only while the panel is key, so
+       a system shortcut on the same keys works everywhere else. */
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if event.type == .keyDown,
+            [kVK_Return, kVK_ANSI_KeypadEnter].contains(Int(event.keyCode))
+        {
+            onCommit?(event.modifierFlags)
+            return true
+        }
+        return super.performKeyEquivalent(with: event)
+    }
 
     override func sendEvent(_ event: NSEvent) {
         if event.type == .keyDown {

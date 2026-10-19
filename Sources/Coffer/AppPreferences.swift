@@ -9,6 +9,7 @@ enum AppPreferences {
     private static let hideMenuBarIconKey = "pref.hideMenuBarIcon"
     private static let showsFilePathsKey = "pref.showsFilePaths"
     private static let showsSourceIconsKey = "pref.showsSourceIcons"
+    private static let pastesWithReturnKey = "pref.pastesWithReturn"
 
     /* The popup's two row extras, both on until turned off: a file row's
        folder under its name, and the copying app's icon at the right. */
@@ -24,6 +25,16 @@ enum AppPreferences {
         get { UserDefaults.standard.object(forKey: showsSourceIconsKey) as? Bool ?? true }
         set {
             UserDefaults.standard.set(newValue, forKey: showsSourceIconsKey)
+            NotificationCenter.default.post(name: changed, object: nil)
+        }
+    }
+
+    /* Off: Return copies and ⌘Return pastes. On: the other way around
+       (see ReturnAction). */
+    static var pastesWithReturn: Bool {
+        get { UserDefaults.standard.bool(forKey: pastesWithReturnKey) }
+        set {
+            UserDefaults.standard.set(newValue, forKey: pastesWithReturnKey)
             NotificationCenter.default.post(name: changed, object: nil)
         }
     }

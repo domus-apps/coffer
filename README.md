@@ -13,9 +13,11 @@
   password managers mark as concealed).
 - Press <kbd>⌘⌥C</kbd> anywhere to summon the history panel, <kbd>↑</kbd>/<kbd>↓</kbd> to pick
   an entry, <kbd>↩</kbd> (or double-click) to copy it back to the clipboard (<kbd>⌥↩</kbd>
-  for a file's path), <kbd>Esc</kbd> to dismiss. Rows drag out as text, files, or images,
-  and resting on a thumbnail opens a larger preview that drags out too. No permissions
-  needed: Coffer never types or pastes for you.
+  for a file's path), <kbd>⌘↩</kbd> to paste it straight into the app you were in
+  (<kbd>⌘⌥↩</kbd> for the path), <kbd>Esc</kbd> to dismiss. With Paste with Return on in
+  Settings, the two swap: <kbd>↩</kbd> and double-click paste, <kbd>⌘↩</kbd> only copies. Pasting needs
+  Accessibility access, asked for the first time you paste. Rows drag out as text, files, or
+  images, and resting on a thumbnail opens a larger preview that drags out too.
   The trash button beside the search field wipes the whole history, after asking once.
 - Notes which app each copy came from (the frontmost one when the copy is seen; macOS doesn't
   record the writer) and shows its icon at the row's right end.

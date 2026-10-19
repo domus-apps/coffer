@@ -15,6 +15,8 @@
 "Unpin" = "고정 해제";
 "Copy" = "복사";
 "Copy Path" = "경로 복사";
+"Paste" = "붙여넣기";
+"Paste Path" = "경로 붙여넣기";
 "Preview" = "미리 보기";
 "Delete" = "삭제";
 "Cancel" = "취소";
@@ -43,6 +45,11 @@
 "Show file paths" = "파일 경로 보기";
 "Show app icons" = "앱 아이콘 보기";
 "The app that was in front when each item was copied." = "각 항목을 복사할 때 앞에 있던 앱입니다.";
+"Paste with Return" = "Return으로 바로 붙여넣기";
+"Return pastes the item into the app you were using, and ⌘Return only copies it. When this is off, it works the other way around." = "Return을 누르면 쓰던 앱에 바로 붙여넣고, ⌘Return을 누르면 클립보드에 복사만 합니다. 끄면 반대로 동작합니다.";
+"Accessibility access" = "손쉬운 사용 접근";
+"Allow…" = "허용…";
+"Needed to paste. Without it, items are only copied." = "붙여넣으려면 필요합니다. 권한이 없으면 복사만 됩니다.";
 "Keep clipboard items" = "보관할 클립보드 항목 수";
 "Reset to Default" = "기본값으로 재설정";
 "Between %1$d and %2$d. The history lives in memory, images in full, so a higher cap uses more RAM. Lowering it removes the oldest items immediately." = "%1$d개에서 %2$d개까지 지정할 수 있습니다. 기록은 이미지까지 원본 그대로 메모리에 보관하므로 개수를 늘릴수록 메모리를 더 씁니다. 줄이면 가장 오래된 항목부터 바로 지워집니다.";

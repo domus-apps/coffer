@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import ServiceManagement
 import SwiftUI
 
@@ -374,6 +375,7 @@ struct GeneralSettingsView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+                PasteWithReturnRow(model: model)
             }
 
             Section {
@@ -399,6 +401,49 @@ struct GeneralSettingsView: View {
             }
         }
         .formStyle(.grouped)
+    }
+}
+
+/* Pasting posts keystrokes, which takes Accessibility access: turning it
+   on asks for it, and until it's there the row says so with a way to the
+   settings pane. Access isn't announced; it's looked at again whenever
+   Coffer becomes active, which coming back from System Settings to this
+   window does. No timer: a closed Settings window is kept, and a timer in
+   it would wake the app every second for good. */
+private struct PasteWithReturnRow: View {
+    @ObservedObject var model: SettingsModel
+    @State private var isAllowed = Paster.isAllowed
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Toggle(
+                L("Paste with Return"),
+                isOn: model.binding(
+                    { AppPreferences.pastesWithReturn },
+                    { on in
+                        AppPreferences.pastesWithReturn = on
+                        if on, !Paster.isAllowed { Paster.requestAccess() }
+                    }))
+            Text(
+                L(
+                    "Return pastes the item into the app you were using, and ⌘Return only "
+                        + "copies it. When this is off, it works the other way around."))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) {
+            _ in isAllowed = Paster.isAllowed
+        }
+        if !isAllowed {
+            VStack(alignment: .leading, spacing: 3) {
+                LabeledContent(L("Accessibility access")) {
+                    Button(L("Allow…")) { Paster.requestAccess() }
+                }
+                Text(L("Needed to paste. Without it, items are only copied."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
     }
 }
 
