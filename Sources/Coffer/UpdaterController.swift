@@ -6,6 +6,8 @@ import Sparkle
    wholesale along with the Sparkle dependency. */
 final class UpdaterController {
     private let controller: SPUStandardUpdaterController
+    /* Sparkle only holds its delegate weakly. */
+    private let relaunchMarker = RelaunchMarker()
     private let isStarted: Bool
 
     init() {
@@ -15,7 +17,7 @@ final class UpdaterController {
            own menu validation. */
         isStarted = Bundle.main.bundleIdentifier != nil
         controller = SPUStandardUpdaterController(
-            startingUpdater: isStarted, updaterDelegate: nil, userDriverDelegate: nil)
+            startingUpdater: isStarted, updaterDelegate: relaunchMarker, userDriverDelegate: nil)
     }
 
     func makeMenuItem() -> NSMenuItem {
@@ -34,5 +36,24 @@ final class UpdaterController {
 
     func checkForUpdates() {
         controller.checkForUpdates(nil)
+    }
+
+    fileprivate static let relaunchKey = "update.relaunchedAt"
+
+    /* Sparkle relaunching the app after installing an update isn't someone
+       opening it. Reads (and clears) the note left just before. */
+    static func launchedByUpdate() -> Bool {
+        let defaults = UserDefaults.standard
+        guard let relaunchedAt = defaults.object(forKey: relaunchKey) as? Date else {
+            return false
+        }
+        defaults.removeObject(forKey: relaunchKey)
+        return Date().timeIntervalSince(relaunchedAt) < 10 * 60
+    }
+}
+
+private final class RelaunchMarker: NSObject, SPUUpdaterDelegate {
+    func updaterWillRelaunchApplication(_ updater: SPUUpdater) {
+        UserDefaults.standard.set(Date(), forKey: UpdaterController.relaunchKey)
     }
 }

@@ -4,6 +4,16 @@ All notable changes to Coffer are documented here. The release workflow publishe
 
 Keep each bullet on a single line: release notes render line breaks literally (both on GitHub and in the update dialog), so wrapped lines would break mid-sentence.
 
+## 2.0.1
+
+### Changed
+
+- Opening Coffer again while it's running, from Spotlight or the Applications folder, brings up Settings.
+
+### Fixed
+
+- With the menu bar icon hidden, opening Coffer when it wasn't running showed no window.
+
 ## 2.0.0
 
 ### Added
