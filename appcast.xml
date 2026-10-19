@@ -663,5 +663,81 @@
         sparkle:edSignature="c5TZtUhOoV0/I+dI+0hyOSFR+tHJUCWZt7GXnWskcfTFAFjnPsnPNr1ITrmyYhQXT9S50xHNrl/+t7FkVqO3Aw==" length="2998415"
         type="application/octet-stream"/>
     </item>
+    <item>
+      <title>Coffer v2.1.0</title>
+      <link>https://github.com/domus-apps/coffer/releases/tag/v2.1.0</link>
+      <pubDate>Mon, 19 Oct 2026 11:51:25 +0000</pubDate>
+      <description xml:lang="en"><![CDATA[
+<h2>2.1.0</h2>
+<h3>Added</h3>
+<ul>
+<li>You can press ⌘Return to paste directly.</li>
+<li>You can press ⌘⌥Return to paste a file's path directly.</li>
+<li>You can set Return to paste directly in Settings.</li>
+<li>You can paste from the right-click menu.</li>
+</ul>
+<h2>2.0.1</h2>
+<h3>Changed</h3>
+<ul>
+<li>Opening Coffer again while it's running, from Spotlight or the Applications folder, brings up Settings.</li>
+</ul>
+<h3>Fixed</h3>
+<ul>
+<li>With the menu bar icon hidden, opening Coffer when it wasn't running showed no window.</li>
+</ul>
+<h2>2.0.0</h2>
+<h3>Added</h3>
+<ul>
+<li>Hovering over a thumbnail shows a preview.</li>
+<li>Supports drag and drop.</li>
+<li>Shows which app each item was copied from.</li>
+<li>Shows the path under the name of copied files.</li>
+<li>File paths can be copied from the right-click menu or with ⌥Return.</li>
+<li>File paths and app icons can be hidden in Settings.</li>
+</ul>
+<h3>Changed</h3>
+<ul>
+<li>The clipboard popup is closer to the macOS design.</li>
+</ul>      ]]></description>
+      <description xml:lang="ko"><![CDATA[
+<h2>2.1.0</h2>
+<h3>추가</h3>
+<ul>
+<li>⌘Return을 눌러 바로 붙여넣을 수 있습니다.</li>
+<li>⌘⌥Return을 눌러 파일 경로를 바로 붙여넣을 수 있습니다.</li>
+<li>설정에서 Return만 눌러도 바로 붙여넣도록 바꿀 수 있습니다.</li>
+<li>오른쪽 클릭 메뉴에서 바로 붙여넣을 수 있습니다.</li>
+</ul>
+<h2>2.0.1</h2>
+<h3>변경</h3>
+<ul>
+<li>실행 중인 Coffer를 Spotlight나 응용 프로그램 폴더에서 다시 열어 설정 창을 띄울 수 있습니다.</li>
+</ul>
+<h3>수정</h3>
+<ul>
+<li>메뉴 막대 아이콘을 숨긴 상태에서 꺼져 있던 Coffer를 열면 아무 창도 나타나지 않던 문제를 수정했습니다.</li>
+</ul>
+<h2>2.0.0</h2>
+<h3>추가</h3>
+<ul>
+<li>썸네일에 마우스를 올려 미리보기할 수 있습니다.</li>
+<li>드래그 앤 드롭을 지원합니다.</li>
+<li>복사가 이루어진 앱을 볼 수 있습니다.</li>
+<li>파일을 복사한 경우 이름 밑에 경로를 보여줍니다.</li>
+<li>오른쪽 클릭 메뉴나 ⌥Return으로 파일 경로를 복사할 수 있습니다.</li>
+<li>설정에서 경로와 앱 아이콘 표시를 끌 수 있습니다.</li>
+</ul>
+<h3>변경</h3>
+<ul>
+<li>클립보드 팝업이 macOS 디자인에 더 가까워졌습니다.</li>
+</ul>      ]]></description>
+      <sparkle:version>20</sparkle:version>
+      <sparkle:shortVersionString>2.1.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+      <enclosure
+        url="https://github.com/domus-apps/coffer/releases/download/v2.1.0/Coffer.zip"
+        sparkle:edSignature="SKmeI7qrVHa6oUhnNo0a10KNmm5CVgOuX4iVlOPhg7jANA8sfoe4KBiNsnRJClVpjbKJW9V/lpltR2QB+EjrBQ==" length="3006209"
+        type="application/octet-stream"/>
+    </item>
   </channel>
 </rss>
