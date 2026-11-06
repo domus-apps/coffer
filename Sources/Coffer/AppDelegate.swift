@@ -334,6 +334,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settings.target = self
         menu.addItem(settings)
         menu.addItem(updater.makeMenuItem())
+        menu.addItem(makeWebsiteItem())
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(
             title: L("Quit Coffer"),
@@ -344,6 +345,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func showHistory() {
         historyPanel?.toggle()
+    }
+
+    private func makeWebsiteItem() -> NSMenuItem {
+        let item = NSMenuItem(
+            title: L("Domus Website"), action: #selector(openWebsite), keyEquivalent: "")
+        item.target = self
+        return item
+    }
+
+    @objc private func openWebsite() {
+        NSWorkspace.shared.open(websiteURL)
     }
 
     @objc private func openSettings() {

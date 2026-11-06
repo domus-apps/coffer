@@ -398,6 +398,9 @@ struct GeneralSettingsView: View {
                     model.updater.checkForUpdates()
                 }
                 .disabled(!model.updater.canCheckForUpdates)
+                Button(L("Domus Website")) {
+                    NSWorkspace.shared.open(websiteURL)
+                }
             }
         }
         .formStyle(.grouped)
